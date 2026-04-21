@@ -2,8 +2,23 @@
 
 // const API_BASE = "http://localhost:5000/api/admin";
 
+function getDefaultAdminApiBaseUrl() {
+  const hostname = window.location.hostname;
+  const isLocalHost =
+    !hostname ||
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.endsWith(".localhost");
+  const baseUrl =
+    isLocalHost || !window.location.origin || window.location.origin === "null"
+      ? "http://localhost:5000"
+      : window.location.origin;
+
+  return `${baseUrl.replace(/\/+$/, "")}/api`;
+}
+
 const BASE_API =
-  window.APP_RUNTIME_CONFIG?.API_BASE_URL || "http://localhost:5000/api";
+  window.APP_RUNTIME_CONFIG?.API_BASE_URL || getDefaultAdminApiBaseUrl();
 
 const API_BASE = `${BASE_API}/admin`;
 const AUTH_API_BASE = `${BASE_API}/auth`;
@@ -13,6 +28,7 @@ const TAB_LABELS = {
   orders: "orders",
   reservations: "reservations",
   inquiries: "inquiries",
+  "contact-submissions": "contact messages",
   "notification-events": "notification events",
   hotels: "hotels",
   "gallery-items": "gallery items",
@@ -52,6 +68,7 @@ const state = {
   orders: [],
   reservations: [],
   inquiries: [],
+  contactSubmissions: [],
   notificationEvents: [],
   notificationEventMaxRetries: 3,
   galleryItems: [],
@@ -507,6 +524,17 @@ function syncNotificationSettingsHotelSlug({ force = false } = {}) {
   }
 }
 
+function syncPaymentRouteSettingsHotelSlug({ force = false } = {}) {
+  const input = document.getElementById("paymentRouteHotelSlugInput");
+  if (!input) return;
+
+  const hotelSlug = getSelectedHotelSlug();
+
+  if (force || !input.value.trim()) {
+    input.value = hotelSlug || "";
+  }
+}
+
 function resetHotelForm() {
   const form = document.getElementById("hotelForm");
   if (!form) return;
@@ -593,6 +621,32 @@ function resetNotificationSettingsForm() {
   });
 }
 
+function fillPaymentRouteSettingsForm(settings = {}) {
+  const help = document.getElementById("paymentRouteSettingsHelp");
+
+  document.getElementById("paymentRouteHotelSlugInput").value =
+    settings.hotelSlug || "";
+  document.getElementById("paymentRouteProviderInput").value =
+    settings.provider || "razorpay";
+  document.getElementById("paymentRouteLinkedAccountInput").value =
+    settings.razorpayLinkedAccountId || "";
+  document.getElementById("paymentRouteEnabledInput").checked =
+    !!settings.routeEnabled;
+
+  if (help) {
+    help.textContent = "Route settings loaded. Current checkout is unchanged until Route checkout is enabled later.";
+  }
+}
+
+function resetPaymentRouteSettingsForm() {
+  fillPaymentRouteSettingsForm({
+    hotelSlug: "",
+    provider: "razorpay",
+    routeEnabled: false,
+    razorpayLinkedAccountId: ""
+  });
+}
+
 function setSectionVisibility(id, shouldShow) {
   const el = document.getElementById(id);
   if (!el) return false;
@@ -643,6 +697,18 @@ async function loadTabData() {
     const result = await fetchJson(buildUrl("inquiries"));
     state.inquiries = result.inquiries || [];
     renderInquiries();
+    return;
+  }
+
+  if (state.activeTab === "contact-submissions") {
+    const hotelSlug = getSelectedHotelSlug();
+    const result = await fetchJson(
+      hotelSlug
+        ? `${API_BASE}/contact-submissions?hotelSlug=${encodeURIComponent(hotelSlug)}`
+        : `${API_BASE}/contact-submissions`
+    );
+    state.contactSubmissions = result.contactSubmissions || [];
+    renderContactSubmissions();
     return;
   }
 
@@ -1525,14 +1591,21 @@ function renderHotelFilter() {
   syncMenuFormHotelSlug({ force: true });
 }
 
-function buildOrderContextRows(order = {}) {
+function getOrderContextValues(order = {}) {
   const orderContext =
     order.orderContext && typeof order.orderContext === "object" && !Array.isArray(order.orderContext)
       ? order.orderContext
       : {};
-  const orderType = order.order_type || orderContext.orderType || "";
-  const tableNumber = order.table_number || orderContext.tableNumber || "";
-  const orderSource = order.order_source || orderContext.orderSource || "";
+
+  return {
+    orderType: order.order_type || orderContext.orderType || "",
+    tableNumber: order.table_number || orderContext.tableNumber || "",
+    orderSource: order.order_source || orderContext.orderSource || ""
+  };
+}
+
+function buildOrderContextRows(order = {}) {
+  const { orderType, tableNumber, orderSource } = getOrderContextValues(order);
   const rows = [];
 
   if (orderType) {
@@ -1558,22 +1631,25 @@ function buildOrderContextRows(order = {}) {
 
 function buildOrderBillingRows(order = {}) {
   const rows = [];
+  const showBillingDefaults = isDineInOrderCard(order);
+  const paymentStatus = getOrderPaymentStatus(order, showBillingDefaults);
+  const billingStatus = getOrderBillingStatus(order, showBillingDefaults);
 
-  if (order.payment_status) {
+  if (paymentStatus) {
     rows.push(
-      `<div class="admin-row"><strong>Payment Status:</strong> ${escapeHTML(order.payment_status)}</div>`
+      `<div class="admin-row"><strong>Payment Status:</strong> ${escapeHTML(getPaymentStatusLabel(paymentStatus))}</div>`
     );
   }
 
-  if (order.billing_status) {
+  if (billingStatus) {
     rows.push(
-      `<div class="admin-row"><strong>Billing Status:</strong> ${escapeHTML(order.billing_status)}</div>`
+      `<div class="admin-row"><strong>Billing Status:</strong> ${escapeHTML(billingStatus)}</div>`
     );
   }
 
   if (order.bill_number) {
     rows.push(
-      `<div class="admin-row"><strong>Bill Number:</strong> ${escapeHTML(order.bill_number)}</div>`
+      `<div class="admin-row"><strong>${escapeHTML(getOrderBillNumberLabel(order))}:</strong> ${escapeHTML(order.bill_number)}</div>`
     );
   }
 
@@ -1590,6 +1666,509 @@ function buildOrderBillingRows(order = {}) {
   }
 
   return rows.join("");
+}
+
+function getOrderRouteMetadata(order = {}) {
+  const paymentMetadata =
+    order.payment_metadata &&
+    typeof order.payment_metadata === "object" &&
+    !Array.isArray(order.payment_metadata)
+      ? order.payment_metadata
+      : {};
+  const route =
+    paymentMetadata.route &&
+    typeof paymentMetadata.route === "object" &&
+    !Array.isArray(paymentMetadata.route)
+      ? paymentMetadata.route
+      : {};
+
+  return {
+    routeStatus: route.routeStatus || "",
+    routeReady: !!route.routeReady,
+    transferRequested: !!route.transferRequested,
+    transferId: order.gateway_transfer_id || route.transferId || "",
+    transferStatus:
+      order.gateway_transfer_status ||
+      route.transferStatus ||
+      route.transfer_status ||
+      "",
+    settlementStatus:
+      order.gateway_settlement_status ||
+      route.settlementStatus ||
+      route.settlement_status ||
+      "",
+    transferError:
+      order.gateway_transfer_error ||
+      route.transferError ||
+      route.transfer_error ||
+      "",
+    linkedAccountId: route.linkedAccountId || ""
+  };
+}
+
+function buildOrderRouteTransferRows(order = {}) {
+  const route = getOrderRouteMetadata(order);
+  const rows = [];
+  const hasRouteData =
+    route.routeStatus ||
+    route.transferRequested ||
+    route.transferId ||
+    route.transferStatus ||
+    route.settlementStatus ||
+    route.linkedAccountId;
+
+  if (!hasRouteData) {
+    return "";
+  }
+
+  if (route.routeStatus) {
+    rows.push(
+      `<div class="admin-row"><strong>Route Status:</strong> ${escapeHTML(route.routeStatus)}</div>`
+    );
+  }
+
+  if (route.linkedAccountId) {
+    rows.push(
+      `<div class="admin-row"><strong>Route Linked Account:</strong> ${escapeHTML(route.linkedAccountId)}</div>`
+    );
+  }
+
+  rows.push(
+    `<div class="admin-row"><strong>Route Transfer Requested:</strong> ${escapeHTML(route.transferRequested ? "yes" : "no")}</div>`
+  );
+
+  if (route.transferId) {
+    rows.push(
+      `<div class="admin-row"><strong>Transfer ID:</strong> ${escapeHTML(route.transferId)}</div>`
+    );
+  }
+
+  if (route.transferStatus) {
+    rows.push(
+      `<div class="admin-row"><strong>Transfer Status:</strong> <span class="status-badge">${escapeHTML(route.transferStatus)}</span></div>`
+    );
+  }
+
+  if (route.settlementStatus) {
+    rows.push(
+      `<div class="admin-row"><strong>Settlement Status:</strong> ${escapeHTML(route.settlementStatus)}</div>`
+    );
+  }
+
+  if (route.transferError) {
+    rows.push(
+      `<div class="admin-row admin-attention-row"><strong>Transfer Error:</strong> ${escapeHTML(route.transferError)}</div>`
+    );
+  }
+
+  return rows.join("");
+}
+
+function isDineInOrderCard(order = {}) {
+  const { orderType, tableNumber } = getOrderContextValues(order);
+  const normalizedOrderType = String(orderType || "")
+    .trim()
+    .toLowerCase();
+  const normalizedTableNumber = String(tableNumber || "").trim();
+
+  return (
+    normalizedOrderType === "dine-in" ||
+    !!normalizedTableNumber ||
+    !!order.payment_status ||
+    !!order.billing_status
+  );
+}
+
+function getOrderPaymentStatus(order = {}, useDefault = isDineInOrderCard(order)) {
+  return order.payment_status || (useDefault ? "unpaid" : "");
+}
+
+function getPaymentStatusLabel(paymentStatus = "") {
+  const normalizedStatus = String(paymentStatus || "").trim().toLowerCase();
+  const labels = {
+    unpaid: "unpaid",
+    customer_confirmed: "customer confirmed, verify before paid",
+    paid: "paid",
+    refunded: "refunded"
+  };
+
+  return labels[normalizedStatus] || normalizedStatus.replace(/_/g, " ");
+}
+
+function getOrderBillingStatus(order = {}, useDefault = isDineInOrderCard(order)) {
+  return order.billing_status || (useDefault ? "not_billed" : "");
+}
+
+function getOrderBillingAttentionMessage(order = {}) {
+  if (!isDineInOrderCard(order)) {
+    return "";
+  }
+
+  const paymentStatus = getOrderPaymentStatus(order, true);
+  const billingStatus = getOrderBillingStatus(order, true);
+
+  if (paymentStatus === "customer_confirmed") {
+    return "Verify UPI receipt before marking paid.";
+  }
+
+  if (billingStatus === "billed" && paymentStatus !== "paid") {
+    return "Bill is ready, payment is not marked paid.";
+  }
+
+  if (paymentStatus === "paid" && billingStatus !== "billed") {
+    return "Payment is marked paid, but billing is not marked billed.";
+  }
+
+  return "";
+}
+
+function buildOrderBillingAttentionRow(order = {}) {
+  const message = getOrderBillingAttentionMessage(order);
+
+  if (!message) {
+    return "";
+  }
+
+  return `<div class="admin-row admin-attention-row"><strong>Payment Attention:</strong> ${escapeHTML(message)}</div>`;
+}
+
+function getOrderBillNumberLabel(order = {}) {
+  return getOrderBillingStatus(order, true) === "billed"
+    ? "Bill Number"
+    : "Saved Bill Ref";
+}
+
+function getOrderBillPrintTitle(order = {}) {
+  if (order.bill_number && getOrderBillingStatus(order, true) === "billed") {
+    return order.bill_number;
+  }
+
+  return `Draft Bill - Order ${order.id || ""}`;
+}
+
+function getNumberValue(value) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function formatDiscountPercent(value) {
+  const percent = getNumberValue(value);
+
+  if (percent === null) return "";
+
+  return Number.isInteger(percent)
+    ? `${percent}%`
+    : `${percent.toFixed(2).replace(/\.?0+$/, "")}%`;
+}
+
+function formatBillMoney(value) {
+  const numberValue = getNumberValue(value);
+  return numberValue === null ? "Rs. 0.00" : `Rs. ${numberValue.toFixed(2)}`;
+}
+
+function getOrderBillItems(order = {}) {
+  return Array.isArray(order.items) ? order.items : [];
+}
+
+function getOrderBillItemLineTotal(item = {}) {
+  const qty = getNumberValue(item.qty) || 0;
+  const price = getNumberValue(item.price) || 0;
+  return qty * price;
+}
+
+function getOrderBillItemSubtotal(order = {}) {
+  return getOrderBillItems(order).reduce(
+    (sum, item) => sum + getOrderBillItemLineTotal(item),
+    0
+  );
+}
+
+function getOrderBillTotals(order = {}) {
+  return order.totals && typeof order.totals === "object" && !Array.isArray(order.totals)
+    ? order.totals
+    : {};
+}
+
+function isUpiOrder(order = {}) {
+  const paymentMethod = String(order.payment_method || "").trim().toLowerCase();
+  return paymentMethod.includes("upi") || paymentMethod.includes("google pay");
+}
+
+function getOrderBillFinalTotal(order = {}) {
+  const totals = getOrderBillTotals(order);
+  const itemSubtotal = getOrderBillItemSubtotal(order);
+
+  if (isUpiOrder(order)) {
+    return (
+      getNumberValue(totals.gpayFinalTotal) ??
+      getNumberValue(totals.total) ??
+      getNumberValue(totals.normalTotal) ??
+      itemSubtotal
+    );
+  }
+
+  return (
+    getNumberValue(totals.total) ??
+    getNumberValue(totals.normalTotal) ??
+    getNumberValue(totals.gpayFinalTotal) ??
+    itemSubtotal
+  );
+}
+
+function buildOrderBillTotalsRows(order = {}) {
+  const totals = getOrderBillTotals(order);
+  const rows = [];
+  const subtotal = getNumberValue(totals.subtotal);
+  const gst = getNumberValue(totals.gst);
+  const normalTotal = getNumberValue(totals.normalTotal);
+  const upiDiscountPercent = getNumberValue(totals.upiDiscountPercent);
+  const gpayDiscount = getNumberValue(totals.gpayDiscount);
+  const gpayFinalTotal = getNumberValue(totals.gpayFinalTotal);
+
+  if (subtotal !== null) {
+    rows.push(`<tr><th>Subtotal</th><td>${escapeHTML(formatBillMoney(subtotal))}</td></tr>`);
+  }
+
+  if (gst !== null) {
+    rows.push(`<tr><th>GST</th><td>${escapeHTML(formatBillMoney(gst))}</td></tr>`);
+  }
+
+  if (isUpiOrder(order) && normalTotal !== null) {
+    rows.push(`<tr><th>Original Total</th><td>${escapeHTML(formatBillMoney(normalTotal))}</td></tr>`);
+  }
+
+  if (isUpiOrder(order) && gpayDiscount !== null) {
+    const discountLabel = upiDiscountPercent !== null
+      ? `Google Pay Discount (${formatDiscountPercent(upiDiscountPercent)})`
+      : "Google Pay Discount";
+    rows.push(`<tr><th>${escapeHTML(discountLabel)}</th><td>-${escapeHTML(formatBillMoney(gpayDiscount))}</td></tr>`);
+  }
+
+  if (isUpiOrder(order) && gpayFinalTotal !== null) {
+    rows.push(`<tr><th>Final Paid Amount</th><td>${escapeHTML(formatBillMoney(gpayFinalTotal))}</td></tr>`);
+  } else {
+    rows.push(`<tr><th>Total</th><td>${escapeHTML(formatBillMoney(getOrderBillFinalTotal(order)))}</td></tr>`);
+  }
+
+  return rows.join("");
+}
+
+function buildOrderBillPrintDocument(order = {}) {
+  const { orderType, tableNumber, orderSource } = getOrderContextValues(order);
+  const billTitle = getOrderBillPrintTitle(order);
+  const savedBillRefRow = order.bill_number
+    ? `<p>${escapeHTML(getOrderBillNumberLabel(order))}: ${escapeHTML(order.bill_number)}</p>`
+    : "";
+  const items = getOrderBillItems(order);
+
+  const itemRows = items.length
+    ? items
+        .map((item, index) => {
+          const qty = getNumberValue(item.qty) || 0;
+          const price = getNumberValue(item.price) || 0;
+          const lineTotal = getOrderBillItemLineTotal(item);
+
+          return `
+            <tr>
+              <td>${escapeHTML(index + 1)}</td>
+              <td>${escapeHTML(item.name || item.id || "Item")}</td>
+              <td>${escapeHTML(qty)}</td>
+              <td>${escapeHTML(formatBillMoney(price))}</td>
+              <td>${escapeHTML(formatBillMoney(lineTotal))}</td>
+            </tr>
+          `;
+        })
+        .join("")
+    : `<tr><td colspan="5">No items found for this order.</td></tr>`;
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHTML(billTitle)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+    .bill { max-width: 760px; margin: 0 auto; }
+    .bill-header { display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #111; padding-bottom: 14px; margin-bottom: 18px; }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 24px; }
+    h2 { font-size: 16px; margin-top: 4px; font-weight: 600; }
+    .muted { color: #555; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin: 18px 0; }
+    .row { font-size: 14px; line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 14px; }
+    th { background: #f2f2f2; }
+    .totals { max-width: 340px; margin-left: auto; }
+    .note { margin-top: 18px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 14px; }
+    .actions { display: flex; justify-content: flex-end; margin-bottom: 18px; }
+    button { border: 0; border-radius: 8px; background: #111; color: #fff; padding: 10px 14px; cursor: pointer; }
+    @media print {
+      body { margin: 0; }
+      .actions { display: none; }
+      .bill { max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bill">
+    <div class="actions">
+      <button type="button" onclick="window.print()">Print Bill</button>
+    </div>
+    <header class="bill-header">
+      <div>
+        <h1>${escapeHTML(order.hotel_name || "Hotel")}</h1>
+        <h2>${escapeHTML(billTitle)}</h2>
+      </div>
+      <div class="muted">
+        <p>Order: ${escapeHTML(order.id || "")}</p>
+        ${savedBillRefRow}
+        <p>Created: ${escapeHTML(order.created_at || "")}</p>
+        <p>Billed: ${escapeHTML(order.billed_at || "Not billed yet")}</p>
+      </div>
+    </header>
+
+    <section class="grid">
+      <div class="row"><strong>Customer:</strong> ${escapeHTML(order.customer_name || "")}</div>
+      <div class="row"><strong>Phone:</strong> ${escapeHTML(order.customer_phone || "")}</div>
+      <div class="row"><strong>Order Type:</strong> ${escapeHTML(orderType || "dine-in")}</div>
+      <div class="row"><strong>Table:</strong> ${escapeHTML(tableNumber || "Not provided")}</div>
+      <div class="row"><strong>Source:</strong> ${escapeHTML(orderSource || "")}</div>
+      <div class="row"><strong>Payment:</strong> ${escapeHTML(order.payment_method || "")}</div>
+      <div class="row"><strong>Payment Status:</strong> ${escapeHTML(getPaymentStatusLabel(getOrderPaymentStatus(order, true)))}</div>
+      <div class="row"><strong>Billing Status:</strong> ${escapeHTML(getOrderBillingStatus(order, true))}</div>
+    </section>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Item</th>
+          <th>Qty</th>
+          <th>Rate</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+
+    <table class="totals">
+      <tbody>${buildOrderBillTotalsRows(order)}</tbody>
+    </table>
+
+    <div class="note">
+      <strong>Note:</strong> ${escapeHTML(order.note || "No note")}
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function openOrderBillPrintView(order = {}) {
+  const printWindow = window.open("", "_blank", "width=780,height=900");
+
+  if (!printWindow) {
+    alert("Please allow popups to open the bill view.");
+    return;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(buildOrderBillPrintDocument(order));
+  printWindow.document.close();
+  printWindow.focus();
+}
+
+function buildSelectOption(value, label, currentValue) {
+  return `<option value="${escapeHTML(value)}" ${currentValue === value ? "selected" : ""}>${escapeHTML(label)}</option>`;
+}
+
+function buildOrderBillingControls(order = {}) {
+  if (!isDineInOrderCard(order)) {
+    return "";
+  }
+
+  const orderId = escapeHTML(order.id);
+  const billingStatus = String(order.billing_status || "not_billed").trim().toLowerCase();
+  const paymentStatus = String(order.payment_status || "unpaid").trim().toLowerCase();
+
+  return `
+    <div class="status-row admin-card-actions">
+      <select class="status-select order-billing-select" data-order-billing-field="billingStatus" data-id="${orderId}" aria-label="Billing status">
+        ${buildSelectOption("not_billed", "not billed", billingStatus)}
+        ${buildSelectOption("billed", "billed", billingStatus)}
+        ${buildSelectOption("cancelled", "billing cancelled", billingStatus)}
+      </select>
+      <select class="status-select order-billing-select" data-order-billing-field="paymentStatus" data-id="${orderId}" aria-label="Payment status">
+        ${buildSelectOption("unpaid", "unpaid", paymentStatus)}
+        ${buildSelectOption("customer_confirmed", getPaymentStatusLabel("customer_confirmed"), paymentStatus)}
+        ${buildSelectOption("paid", "paid", paymentStatus)}
+        ${buildSelectOption("refunded", "refunded", paymentStatus)}
+      </select>
+      <button class="status-btn" data-update-order-billing data-id="${orderId}">Update Billing</button>
+      <button class="status-btn" data-print-order-bill data-id="${orderId}">View Bill</button>
+    </div>
+  `;
+}
+
+function getOrderBillingSummaryCounts(orders = []) {
+  const dineInOrders = orders.filter(isDineInOrderCard);
+  const notBilled = dineInOrders.filter(
+    (order) => getOrderBillingStatus(order, true) === "not_billed"
+  );
+  const billedAndPaid = dineInOrders.filter(
+    (order) =>
+      getOrderBillingStatus(order, true) === "billed" &&
+      getOrderPaymentStatus(order, true) === "paid"
+  );
+  const billedNotPaid = dineInOrders.filter(
+    (order) =>
+      getOrderBillingStatus(order, true) === "billed" &&
+      getOrderPaymentStatus(order, true) !== "paid"
+  );
+  const needsPaymentVerification = dineInOrders.filter(
+    (order) => getOrderPaymentStatus(order, true) === "customer_confirmed"
+  );
+  const paidNotBilled = dineInOrders.filter(
+    (order) =>
+      getOrderPaymentStatus(order, true) === "paid" &&
+      getOrderBillingStatus(order, true) !== "billed"
+  );
+
+  return {
+    dineIn: dineInOrders.length,
+    notBilled: notBilled.length,
+    billedAndPaid: billedAndPaid.length,
+    billedNotPaid: billedNotPaid.length,
+    needsPaymentVerification: needsPaymentVerification.length,
+    paidNotBilled: paidNotBilled.length
+  };
+}
+
+function buildOrderBillingSummaryCard(orders = []) {
+  const counts = getOrderBillingSummaryCounts(orders);
+
+  if (!counts.dineIn) {
+    return "";
+  }
+
+  return `
+    <div class="admin-card admin-list-summary">
+      <h3>Dine-in Billing</h3>
+      <p class="admin-toolbar-help">Customer confirmed means verify before paid. Only mark paid after the operator confirms receipt.</p>
+      <div class="status-row">
+        <span class="status-badge">Dine-in: ${escapeHTML(counts.dineIn)}</span>
+        <span class="status-badge">Not billed: ${escapeHTML(counts.notBilled)}</span>
+        <span class="status-badge">Billed not paid: ${escapeHTML(counts.billedNotPaid)}</span>
+        <span class="status-badge">Verify UPI: ${escapeHTML(counts.needsPaymentVerification)}</span>
+        <span class="status-badge">Paid: ${escapeHTML(counts.billedAndPaid)}</span>
+        ${
+          counts.paidNotBilled
+            ? `<span class="status-badge">Paid not billed: ${escapeHTML(counts.paidNotBilled)}</span>`
+            : ""
+        }
+      </div>
+    </div>
+  `;
 }
 
 function renderOrders() {
@@ -1614,6 +2193,7 @@ function renderOrders() {
       count: state.orders.length,
       description: "Review incoming food orders and update their current status."
     })}
+    ${buildOrderBillingSummaryCard(state.orders)}
     <div class="admin-grid">
       ${state.orders
         .map(
@@ -1629,6 +2209,8 @@ function renderOrders() {
               ${buildOrderContextRows(order)}
               <div class="admin-row"><strong>Payment:</strong> ${escapeHTML(order.payment_method || "")}</div>
               ${buildOrderBillingRows(order)}
+              ${buildOrderRouteTransferRows(order)}
+              ${buildOrderBillingAttentionRow(order)}
               <div class="admin-row"><strong>Note:</strong> ${escapeHTML(order.note || "")}</div>
               <div class="admin-row"><strong>Total:</strong> ₹${escapeHTML(order.totals?.total ?? "")}</div>
               <div class="admin-row"><strong>Status:</strong> <span class="status-badge">${escapeHTML(order.status || "new")}</span></div>
@@ -1648,6 +2230,7 @@ function renderOrders() {
                 </select>
                 <button class="status-btn" data-update-status data-type="orders" data-id="${escapeHTML(order.id)}">Update Status</button>
               </div>
+              ${buildOrderBillingControls(order)}
             </article>
           `
         )
@@ -1842,6 +2425,86 @@ async function updateStatus(type, id, status) {
   });
 }
 
+function renderContactSubmissions() {
+  const content = $("#adminContent");
+  if (!content) return;
+
+  if (!state.contactSubmissions.length) {
+    content.innerHTML = `
+      ${buildAdminListSummaryCard({
+        title: "Contact Messages",
+        count: 0,
+        description: "Review public contact form messages saved from the website."
+      })}
+      <p class="empty-state">No contact messages found.</p>
+    `;
+    return;
+  }
+
+  content.innerHTML = `
+    ${buildAdminListSummaryCard({
+      title: "Contact Messages",
+      count: state.contactSubmissions.length,
+      description: "Review public contact form messages saved from the website."
+    })}
+    <div class="admin-grid">
+      ${state.contactSubmissions
+        .map(
+          (item) => `
+            <article class="admin-card">
+              <h3>Contact #${escapeHTML(item.id)}</h3>
+              <div class="admin-meta">${escapeHTML(item.created_at || "")}</div>
+
+              <div class="admin-row"><strong>Hotel:</strong> ${escapeHTML(item.hotel_name || "")}</div>
+              <div class="admin-row"><strong>Hotel Slug:</strong> ${escapeHTML(item.hotel_slug || "")}</div>
+              <div class="admin-row"><strong>Name:</strong> ${escapeHTML(item.name || "")}</div>
+              <div class="admin-row"><strong>Email:</strong> ${escapeHTML(item.email || "")}</div>
+              <div class="admin-row"><strong>Subject:</strong> ${escapeHTML(item.subject || "")}</div>
+              <div class="admin-row"><strong>Message:</strong> ${escapeHTML(item.message || "")}</div>
+              <div class="admin-row"><strong>Sheet Status:</strong> ${escapeHTML(item.google_sheet_status || "")}</div>
+              <div class="admin-row"><strong>Status:</strong> <span class="status-badge">${escapeHTML(item.status || "new")}</span></div>
+
+              <div class="status-row">
+                <select class="status-select" data-type="contact-submissions" data-id="${escapeHTML(item.id)}">
+                  <option value="new" ${item.status === "new" ? "selected" : ""}>new</option>
+                  <option value="contacted" ${item.status === "contacted" ? "selected" : ""}>contacted</option>
+                  <option value="resolved" ${item.status === "resolved" ? "selected" : ""}>resolved</option>
+                  <option value="closed" ${item.status === "closed" ? "selected" : ""}>closed</option>
+                  <option value="archived" ${item.status === "archived" ? "selected" : ""}>archived</option>
+                </select>
+                <button class="status-btn" data-update-status data-type="contact-submissions" data-id="${escapeHTML(item.id)}">Update Status</button>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+async function updateOrderBilling(id, payload) {
+  await fetchJson(`${API_BASE}/orders/${id}/billing`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+function getBillingUpdateConfirmMessage(id, payload = {}) {
+  const billingStatus = String(payload.billingStatus || "").replace(/_/g, " ");
+  const paymentStatus = getPaymentStatusLabel(payload.paymentStatus);
+
+  return [
+    `Update billing for order ${id}?`,
+    `Billing Status: ${billingStatus || "not set"}`,
+    `Payment Status: ${paymentStatus || "not set"}`,
+    "",
+    "Only continue if the operator has confirmed this change."
+  ].join("\n");
+}
+
 function bindTabs() {
   const tabs = [...document.querySelectorAll(".admin-tab[data-tab]")];
   tabs.forEach((tab) => {
@@ -1948,6 +2611,64 @@ function bindStatusActions() {
       btn.textContent = "Update Status";
     }
   });
+
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-update-order-billing]");
+    if (!btn) return;
+
+    const { id } = btn.dataset;
+    const billingSelect = document.querySelector(
+      `.order-billing-select[data-order-billing-field="billingStatus"][data-id="${id}"]`
+    );
+    const paymentSelect = document.querySelector(
+      `.order-billing-select[data-order-billing-field="paymentStatus"][data-id="${id}"]`
+    );
+
+    if (!billingSelect || !paymentSelect) return;
+
+    const nextBillingStatus = billingSelect.value;
+    const nextPaymentStatus = paymentSelect.value;
+    const confirmed = window.confirm(
+      getBillingUpdateConfirmMessage(id, {
+        billingStatus: nextBillingStatus,
+        paymentStatus: nextPaymentStatus
+      })
+    );
+
+    if (!confirmed) return;
+
+    try {
+      btn.disabled = true;
+      btn.textContent = "Updating...";
+
+      await updateOrderBilling(id, {
+        billingStatus: nextBillingStatus,
+        paymentStatus: nextPaymentStatus
+      });
+      await loadTabData();
+    } catch (error) {
+      console.error("Billing update failed:", error);
+      alert("Failed to update billing");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Update Billing";
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-print-order-bill]");
+    if (!btn) return;
+
+    const { id } = btn.dataset;
+    const order = state.orders.find((item) => String(item.id) === String(id));
+
+    if (!order) {
+      alert("Order not found in the current dashboard list.");
+      return;
+    }
+
+    openOrderBillPrintView(order);
+  });
 }
 
 function bindFormToggles() {
@@ -1957,6 +2678,9 @@ function bindFormToggles() {
   const testimonialBtn = document.getElementById("openTestimonialFormBtn");
   const notificationSettingsBtn = document.getElementById(
     "openNotificationSettingsBtn"
+  );
+  const paymentRouteSettingsBtn = document.getElementById(
+    "openPaymentRouteSettingsBtn"
   );
   const profileBtn = document.getElementById("openProfileFormBtn");
   const qrTableLinkBtn = document.getElementById("openQrTableLinkBtn");
@@ -1989,6 +2713,42 @@ function bindFormToggles() {
       scrollSectionIntoView("notificationSettingsSection");
     });
     notificationSettingsBtn.dataset.boundClick = "true";
+  }
+
+  if (
+    paymentRouteSettingsBtn &&
+    paymentRouteSettingsBtn.dataset.boundClick !== "true"
+  ) {
+    paymentRouteSettingsBtn.addEventListener("click", async () => {
+      syncPaymentRouteSettingsHotelSlug({ force: true });
+      const isVisible = setSectionVisibility("paymentRouteSettingsSection");
+
+      if (!isVisible) return;
+
+      const hotelSlug =
+        document.getElementById("paymentRouteHotelSlugInput")?.value.trim() || "";
+
+      if (hotelSlug) {
+        try {
+          const result = await fetchPaymentRouteSettings(hotelSlug);
+          fillPaymentRouteSettingsForm(result.settings || {});
+          const help = document.getElementById("paymentRouteSettingsHelp");
+
+          if (help && result.schemaReady === false) {
+            help.textContent =
+              "Run the hotel payment Route settings SQL script before saving.";
+          }
+        } catch (error) {
+          console.error("Failed to load payment Route settings:", error);
+          alert(error.message || "Failed to load payment Route settings");
+        }
+      } else {
+        resetPaymentRouteSettingsForm();
+      }
+
+      scrollSectionIntoView("paymentRouteSettingsSection");
+    });
+    paymentRouteSettingsBtn.dataset.boundClick = "true";
   }
 
   if (profileBtn) {
@@ -2462,6 +3222,12 @@ async function fetchNotificationSettings(slug) {
   );
 }
 
+async function fetchPaymentRouteSettings(slug) {
+  return fetchJson(
+    `${API_BASE}/payment-route-settings/${encodeURIComponent(slug)}`
+  );
+}
+
 async function saveHotelProfile(payload) {
   return fetchJson(`${API_BASE}/hotel-profiles`, {
     method: "POST",
@@ -2482,6 +3248,16 @@ async function saveNotificationSettings(payload) {
   });
 }
 
+async function savePaymentRouteSettings(payload) {
+  return fetchJson(`${API_BASE}/payment-route-settings`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
 function parseJsonInput(value, fallback) {
   const trimmed = String(value || "").trim();
 
@@ -2492,6 +3268,16 @@ function parseJsonInput(value, fallback) {
   } catch (error) {
     throw new Error("Invalid JSON input");
   }
+}
+
+function parseJsonArrayInput(value, fallback, label) {
+  const parsedValue = parseJsonInput(value, fallback);
+
+  if (!Array.isArray(parsedValue)) {
+    throw new Error(`${label} must be a JSON array.`);
+  }
+
+  return parsedValue;
 }
 
 function formatJson(value) {
@@ -2520,6 +3306,13 @@ function getTrimmedInputValue(id) {
   return document.getElementById(id)?.value.trim() || "";
 }
 
+function setInputValue(id, value) {
+  const input = document.getElementById(id);
+  if (!input) return;
+
+  input.value = value || "";
+}
+
 function getValidProfileHeroScenePreset(value) {
   const candidate = String(value || "").trim().toLowerCase();
   return PROFILE_HERO_SCENE_PRESETS[candidate] ? candidate : "";
@@ -2536,6 +3329,20 @@ function getOptionalNumberInputValue(id, label) {
 
   if (!Number.isFinite(parsedValue)) {
     throw new Error(`${label} must be a valid number.`);
+  }
+
+  return parsedValue;
+}
+
+function getOptionalPercentageInputValue(id, label) {
+  const parsedValue = getOptionalNumberInputValue(id, label);
+
+  if (parsedValue === null) {
+    return null;
+  }
+
+  if (parsedValue < 0 || parsedValue > 100) {
+    throw new Error(`${label} must be between 0 and 100.`);
   }
 
   return parsedValue;
@@ -2934,6 +3741,40 @@ function fillProfileThemeFields(theme) {
     !Array.isArray(safeTheme.loadingScreen)
       ? safeTheme.loadingScreen
       : {};
+  const payment =
+    safeTheme.payment && typeof safeTheme.payment === "object" && !Array.isArray(safeTheme.payment)
+      ? safeTheme.payment
+      : {};
+  const content =
+    safeTheme.content && typeof safeTheme.content === "object" && !Array.isArray(safeTheme.content)
+      ? safeTheme.content
+      : {};
+  const navLabels =
+    content.navLabels && typeof content.navLabels === "object" && !Array.isArray(content.navLabels)
+      ? content.navLabels
+      : {};
+  const menuSection =
+    content.menuSection &&
+    typeof content.menuSection === "object" &&
+    !Array.isArray(content.menuSection)
+      ? content.menuSection
+      : {};
+  const menuCategories =
+    content.menuCategories &&
+    typeof content.menuCategories === "object" &&
+    !Array.isArray(content.menuCategories)
+      ? content.menuCategories
+      : {};
+  const ctaLabels =
+    content.ctaLabels && typeof content.ctaLabels === "object" && !Array.isArray(content.ctaLabels)
+      ? content.ctaLabels
+      : {};
+  const footerLabels =
+    content.footerLabels &&
+    typeof content.footerLabels === "object" &&
+    !Array.isArray(content.footerLabels)
+      ? content.footerLabels
+      : {};
   const sections =
     safeTheme.sections &&
     typeof safeTheme.sections === "object" &&
@@ -2962,6 +3803,46 @@ function fillProfileThemeFields(theme) {
     loadingScreen.accentColor || "";
   document.getElementById("profileThemeLoadingTextColorInput").value =
     loadingScreen.textColor || "";
+  document.getElementById("profileUpiDiscountPercentInput").value =
+    payment.upiDiscountPercent ?? "";
+  setInputValue("profileNavLabelAboutInput", navLabels.about);
+  setInputValue("profileNavLabelMenuInput", navLabels.menu);
+  setInputValue("profileNavLabelGalleryInput", navLabels.gallery);
+  setInputValue("profileNavLabelEventsInput", navLabels.events);
+  setInputValue("profileNavLabelTestimonialsInput", navLabels.testimonials);
+  setInputValue("profileNavLabelContactInput", navLabels.contact);
+  setInputValue("profileNavLabelReservationInput", navLabels.reservation);
+  setInputValue("profileMenuSectionEyebrowInput", menuSection.eyebrow);
+  setInputValue("profileMenuSectionTitleInput", menuSection.title);
+  setInputValue("profileMenuSectionSubtitleInput", menuSection.subtitle);
+  setInputValue("profileMenuViewFullLabelInput", menuSection.viewFullMenu);
+  setInputValue("profileFullMenuSectionEyebrowInput", menuSection.fullEyebrow);
+  setInputValue("profileFullMenuSectionTitleInput", menuSection.fullTitle);
+  setInputValue("profileFullMenuSectionSubtitleInput", menuSection.fullSubtitle);
+  setInputValue("profileMenuCategoryStartersInput", menuCategories.starters);
+  setInputValue("profileMenuCategoryMainsInput", menuCategories.mains);
+  setInputValue("profileMenuCategoryDessertsInput", menuCategories.desserts);
+  setInputValue("profileMenuCategoryDrinksInput", menuCategories.drinks);
+  setInputValue("profileCtaHeroPrimaryInput", ctaLabels.heroPrimary);
+  setInputValue("profileCtaHeroReservationInput", ctaLabels.heroReservation);
+  setInputValue("profileCtaAboutReservationInput", ctaLabels.aboutReservation);
+  setInputValue("profileCtaCartButtonInput", ctaLabels.cartButton);
+  setInputValue("profileCtaMenuScrollHintInput", ctaLabels.menuScrollHint);
+  setInputValue("profileCtaLoadMoreInput", ctaLabels.loadMore);
+  setInputValue("profileCtaLoadMoreHintInput", ctaLabels.loadMoreHint);
+  setInputValue("profileFooterLabelExploreHeadingInput", footerLabels.exploreHeading);
+  setInputValue("profileFooterLabelAboutInput", footerLabels.about);
+  setInputValue("profileFooterLabelMenuInput", footerLabels.menu);
+  setInputValue("profileFooterLabelGalleryInput", footerLabels.gallery);
+  setInputValue("profileFooterLabelEventsInput", footerLabels.events);
+  setInputValue("profileFooterLabelReviewsInput", footerLabels.reviews);
+  setInputValue("profileFooterLabelReservationsHeadingInput", footerLabels.reservationsHeading);
+  setInputValue("profileFooterLabelBookTableInput", footerLabels.bookTable);
+  setInputValue("profileFooterLabelPrivateDiningInput", footerLabels.privateDining);
+  setInputValue("profileFooterLabelContactInput", footerLabels.contact);
+  setInputValue("profileFooterLabelOpeningHoursHeadingInput", footerLabels.openingHoursHeading);
+  setInputValue("profileFooterLabelFindUsHeadingInput", footerLabels.findUsHeading);
+  setInputValue("profileFooterLabelCopyrightSuffixInput", footerLabels.copyrightSuffix);
   document.getElementById("profileThemeTypographyPresetInput").value =
     getValidProfileThemeTypographyPreset(typography.preset);
   document.getElementById("profileThemeContainerPresetInput").value =
@@ -3220,10 +4101,62 @@ function buildProfileThemePayload(currentHotelSlug) {
     accentColor: getTrimmedInputValue("profileThemeLoadingAccentColorInput"),
     textColor: getTrimmedInputValue("profileThemeLoadingTextColorInput")
   };
+  const navLabelValues = {
+    about: getTrimmedInputValue("profileNavLabelAboutInput"),
+    menu: getTrimmedInputValue("profileNavLabelMenuInput"),
+    gallery: getTrimmedInputValue("profileNavLabelGalleryInput"),
+    events: getTrimmedInputValue("profileNavLabelEventsInput"),
+    testimonials: getTrimmedInputValue("profileNavLabelTestimonialsInput"),
+    contact: getTrimmedInputValue("profileNavLabelContactInput"),
+    reservation: getTrimmedInputValue("profileNavLabelReservationInput")
+  };
+  const menuSectionValues = {
+    eyebrow: getTrimmedInputValue("profileMenuSectionEyebrowInput"),
+    title: getTrimmedInputValue("profileMenuSectionTitleInput"),
+    subtitle: getTrimmedInputValue("profileMenuSectionSubtitleInput"),
+    viewFullMenu: getTrimmedInputValue("profileMenuViewFullLabelInput"),
+    fullEyebrow: getTrimmedInputValue("profileFullMenuSectionEyebrowInput"),
+    fullTitle: getTrimmedInputValue("profileFullMenuSectionTitleInput"),
+    fullSubtitle: getTrimmedInputValue("profileFullMenuSectionSubtitleInput")
+  };
+  const menuCategoryValues = {
+    starters: getTrimmedInputValue("profileMenuCategoryStartersInput"),
+    mains: getTrimmedInputValue("profileMenuCategoryMainsInput"),
+    desserts: getTrimmedInputValue("profileMenuCategoryDessertsInput"),
+    drinks: getTrimmedInputValue("profileMenuCategoryDrinksInput")
+  };
+  const ctaLabelValues = {
+    heroPrimary: getTrimmedInputValue("profileCtaHeroPrimaryInput"),
+    heroReservation: getTrimmedInputValue("profileCtaHeroReservationInput"),
+    aboutReservation: getTrimmedInputValue("profileCtaAboutReservationInput"),
+    cartButton: getTrimmedInputValue("profileCtaCartButtonInput"),
+    menuScrollHint: getTrimmedInputValue("profileCtaMenuScrollHintInput"),
+    loadMore: getTrimmedInputValue("profileCtaLoadMoreInput"),
+    loadMoreHint: getTrimmedInputValue("profileCtaLoadMoreHintInput")
+  };
+  const footerLabelValues = {
+    exploreHeading: getTrimmedInputValue("profileFooterLabelExploreHeadingInput"),
+    about: getTrimmedInputValue("profileFooterLabelAboutInput"),
+    menu: getTrimmedInputValue("profileFooterLabelMenuInput"),
+    gallery: getTrimmedInputValue("profileFooterLabelGalleryInput"),
+    events: getTrimmedInputValue("profileFooterLabelEventsInput"),
+    reviews: getTrimmedInputValue("profileFooterLabelReviewsInput"),
+    reservationsHeading: getTrimmedInputValue("profileFooterLabelReservationsHeadingInput"),
+    bookTable: getTrimmedInputValue("profileFooterLabelBookTableInput"),
+    privateDining: getTrimmedInputValue("profileFooterLabelPrivateDiningInput"),
+    contact: getTrimmedInputValue("profileFooterLabelContactInput"),
+    openingHoursHeading: getTrimmedInputValue("profileFooterLabelOpeningHoursHeadingInput"),
+    findUsHeading: getTrimmedInputValue("profileFooterLabelFindUsHeadingInput"),
+    copyrightSuffix: getTrimmedInputValue("profileFooterLabelCopyrightSuffixInput")
+  };
   const typographyPresetValue = getSelectedProfileThemeTypographyPreset();
   const containerPresetValue = getSelectedProfileThemeContainerPreset();
   const buttonPresetValue = getSelectedProfileThemeButtonPreset();
   const heroLayoutPresetValue = getSelectedProfileThemeHeroLayoutPreset();
+  const upiDiscountPercent = getOptionalPercentageInputValue(
+    "profileUpiDiscountPercentInput",
+    "Google Pay / UPI discount percentage"
+  );
   const showAbout = Boolean(document.getElementById("profileThemeShowAboutInput")?.checked);
   const showEvents = Boolean(document.getElementById("profileThemeShowEventsInput")?.checked);
   const showReservation = Boolean(
@@ -3260,9 +4193,69 @@ function buildProfileThemePayload(currentHotelSlug) {
     delete nextTheme[groupName];
   }
 
+  function applyManagedContentGroup(groupName, values) {
+    const currentContent =
+      nextTheme.content &&
+      typeof nextTheme.content === "object" &&
+      !Array.isArray(nextTheme.content)
+        ? { ...nextTheme.content }
+        : {};
+    const currentGroup =
+      currentContent[groupName] &&
+      typeof currentContent[groupName] === "object" &&
+      !Array.isArray(currentContent[groupName])
+        ? { ...currentContent[groupName] }
+        : {};
+
+    Object.entries(values).forEach(([key, value]) => {
+      if (value) {
+        currentGroup[key] = value;
+        return;
+      }
+
+      delete currentGroup[key];
+    });
+
+    if (Object.keys(currentGroup).length) {
+      currentContent[groupName] = currentGroup;
+    } else {
+      delete currentContent[groupName];
+    }
+
+    if (Object.keys(currentContent).length) {
+      nextTheme.content = currentContent;
+      return;
+    }
+
+    delete nextTheme.content;
+  }
+
   applyManagedGroup("colors", colorValues);
   applyManagedGroup("radius", radiusValues);
   applyManagedGroup("loadingScreen", loadingScreenValues);
+  applyManagedContentGroup("navLabels", navLabelValues);
+  applyManagedContentGroup("menuSection", menuSectionValues);
+  applyManagedContentGroup("menuCategories", menuCategoryValues);
+  applyManagedContentGroup("ctaLabels", ctaLabelValues);
+  applyManagedContentGroup("footerLabels", footerLabelValues);
+
+  if (upiDiscountPercent !== null) {
+    nextTheme.payment = {
+      ...(nextTheme.payment && typeof nextTheme.payment === "object" && !Array.isArray(nextTheme.payment)
+        ? nextTheme.payment
+        : {}),
+      upiDiscountPercent
+    };
+  } else if (nextTheme.payment && typeof nextTheme.payment === "object" && !Array.isArray(nextTheme.payment)) {
+    const nextPayment = { ...nextTheme.payment };
+    delete nextPayment.upiDiscountPercent;
+
+    if (Object.keys(nextPayment).length) {
+      nextTheme.payment = nextPayment;
+    } else {
+      delete nextTheme.payment;
+    }
+  }
 
   const currentTypography =
     nextTheme.typography &&
@@ -3607,7 +4600,12 @@ function bindProfileForm() {
         },
 
         footer: {
-          description: document.getElementById("profileFooterDescriptionInput")?.value.trim()
+          description: document.getElementById("profileFooterDescriptionInput")?.value.trim(),
+          openingHours: parseJsonArrayInput(
+            document.getElementById("profileFooterOpeningHoursInput")?.value,
+            [],
+            "Footer opening hours"
+          )
         },
 
         social: {
@@ -3726,6 +4724,9 @@ function fillProfileForm(profile) {
   document.getElementById("profileMapLinkInput").value = profile.location?.mapLink || "";
 
   document.getElementById("profileFooterDescriptionInput").value = profile.footer?.description || "";
+  document.getElementById("profileFooterOpeningHoursInput").value = formatJson(
+    Array.isArray(profile.footer?.openingHours) ? profile.footer.openingHours : []
+  );
 
   document.getElementById("profileInstagramInput").value = profile.social?.instagram || "";
   document.getElementById("profileFacebookInput").value = profile.social?.facebook || "";
@@ -3976,6 +4977,54 @@ function bindNotificationSettingsForm() {
   });
 }
 
+function bindPaymentRouteSettingsForm() {
+  const form = document.getElementById("paymentRouteSettingsForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    try {
+      const payload = {
+        hotelSlug:
+          document.getElementById("paymentRouteHotelSlugInput")?.value.trim() ||
+          "",
+        provider:
+          document.getElementById("paymentRouteProviderInput")?.value || "razorpay",
+        routeEnabled:
+          !!document.getElementById("paymentRouteEnabledInput")?.checked,
+        razorpayLinkedAccountId:
+          document.getElementById("paymentRouteLinkedAccountInput")?.value.trim() || ""
+      };
+
+      if (!payload.hotelSlug) {
+        alert("Hotel slug is required.");
+        return;
+      }
+
+      if (
+        payload.razorpayLinkedAccountId &&
+        !/^acc_[A-Za-z0-9]+$/.test(payload.razorpayLinkedAccountId)
+      ) {
+        alert("Razorpay linked account id should look like acc_xxxxx.");
+        return;
+      }
+
+      if (payload.routeEnabled && !payload.razorpayLinkedAccountId) {
+        alert("Linked account id is required when Route is enabled.");
+        return;
+      }
+
+      const result = await savePaymentRouteSettings(payload);
+      fillPaymentRouteSettingsForm(result.settings || payload);
+      alert("Payment Route settings saved successfully.");
+    } catch (error) {
+      console.error("Payment Route settings save failed:", error);
+      alert(error.message || "Failed to save payment Route settings");
+    }
+  });
+}
+
 async function toggleGalleryArchive(id, isArchived) {
   return fetchJson(`${API_BASE}/gallery-items/${id}/archive`, {
     method: "PATCH",
@@ -4095,6 +5144,7 @@ async function initAdmin() {
     bindGalleryItemForm();
     bindTestimonialForm();
     bindNotificationSettingsForm();
+    bindPaymentRouteSettingsForm();
     bindEditActions();
     bindProfileForm();
     bindUploadForm();
@@ -4103,6 +5153,7 @@ async function initAdmin() {
     syncGalleryFormHotelSlug();
     syncTestimonialFormHotelSlug();
     syncNotificationSettingsHotelSlug();
+    syncPaymentRouteSettingsHotelSlug();
     syncQrTableLinkHotelSlug();
     bindAdminLoginForm();
     bindAdminLogout();

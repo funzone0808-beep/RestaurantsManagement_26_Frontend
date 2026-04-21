@@ -12,20 +12,66 @@ window.APP_STATE = {
   orderContext: {
     orderType: "standard",
     tableNumber: "",
-    orderSource: "website"
+    orderSource: "website",
+    addToOrderId: "",
+    addToken: ""
   }
 };
 
-// const FRONTEND_DEFAULT_HOTEL_SLUG = "hotel-sai-raj";
 // const API_BASE = "http://localhost:5000/api";
 // const TENANT_API_BASE = `${API_BASE}/tenant`;
 // const PUBLIC_API_BASE = `${API_BASE}/public`;
 
-const FRONTEND_DEFAULT_HOTEL_SLUG =
-  window.APP_RUNTIME_CONFIG?.DEFAULT_HOTEL_SLUG || "hotel-sai-raj";
+const HOTEL_SLUG_STORAGE_KEY = "hotel_platform_last_hotel_slug";
+
+function normalizeHotelSlug(value) {
+  return typeof value === "string" ? value.trim().slice(0, 120) : "";
+}
+
+function getStoredHotelSlug() {
+  try {
+    return normalizeHotelSlug(window.localStorage?.getItem(HOTEL_SLUG_STORAGE_KEY));
+  } catch {
+    return "";
+  }
+}
+
+function rememberHotelSlug(slug) {
+  const normalizedSlug = normalizeHotelSlug(slug);
+
+  if (!normalizedSlug) return;
+
+  try {
+    window.localStorage?.setItem(HOTEL_SLUG_STORAGE_KEY, normalizedSlug);
+  } catch {
+    // Storage can be unavailable in private browsing; query/domain routing still works.
+  }
+}
+
+function getRuntimeDefaultHotelSlug() {
+  return (
+    normalizeHotelSlug(window.APP_RUNTIME_CONFIG?.DEFAULT_HOTEL_SLUG) ||
+    getStoredHotelSlug()
+  );
+}
+
+function getDefaultApiBaseUrl() {
+  const hostname = window.location.hostname;
+  const isLocalHost =
+    !hostname ||
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.endsWith(".localhost");
+  const baseUrl =
+    isLocalHost || !window.location.origin || window.location.origin === "null"
+      ? "http://localhost:5000"
+      : window.location.origin;
+
+  return `${baseUrl.replace(/\/+$/, "")}/api`;
+}
 
 const API_BASE =
-  window.APP_RUNTIME_CONFIG?.API_BASE_URL || "http://localhost:5000/api";
+  window.APP_RUNTIME_CONFIG?.API_BASE_URL || getDefaultApiBaseUrl();
 
 const TENANT_API_BASE = `${API_BASE}/tenant`;
 const PUBLIC_API_BASE = `${API_BASE}/public`;
@@ -147,14 +193,27 @@ function getOrderContextFromQuery() {
     return {
       orderType: "standard",
       tableNumber: "",
-      orderSource: "website"
+      orderSource: "website",
+      addToOrderId: "",
+      addToken: ""
     };
   }
+
+  const addToOrderId = normalizeOrderContextParam(
+    params.get("addToOrder") || params.get("parentOrder") || params.get("orderId"),
+    120
+  );
+  const addToken = normalizeOrderContextParam(
+    params.get("addToken") || params.get("trackingToken"),
+    200
+  );
 
   return {
     orderType: "dine-in",
     tableNumber,
-    orderSource: normalizeOrderContextParam(params.get("source"), 40) || "qr"
+    orderSource: normalizeOrderContextParam(params.get("source"), 40) || "qr",
+    addToOrderId,
+    addToken
   };
 }
 
@@ -184,6 +243,16 @@ function normalizeThemeBoolean(value) {
   return typeof value === "boolean" ? value : null;
 }
 
+function normalizeThemePercentage(value, fallback = null) {
+  const candidate = Number(value);
+
+  if (!Number.isFinite(candidate)) {
+    return fallback;
+  }
+
+  return Math.min(Math.max(candidate, 0), 100);
+}
+
 function normalizeThemeSectionOrder(value) {
   if (!Array.isArray(value)) return [];
 
@@ -207,6 +276,18 @@ function normalizeThemeGroup(rawGroup, allowedKeys) {
 
   return allowedKeys.reduce((nextGroup, key) => {
     const value = normalizeThemeString(rawGroup[key]);
+    if (value) {
+      nextGroup[key] = value;
+    }
+    return nextGroup;
+  }, {});
+}
+
+function normalizeThemeTextGroup(rawGroup, allowedKeys, maxLength = 120) {
+  if (!isPlainObject(rawGroup)) return {};
+
+  return allowedKeys.reduce((nextGroup, key) => {
+    const value = normalizeThemeString(rawGroup[key], maxLength);
     if (value) {
       nextGroup[key] = value;
     }
@@ -274,6 +355,58 @@ function normalizeTheme(rawTheme) {
     "solid",
     "crisp"
   ]);
+  const upiDiscountPercent = normalizeThemePercentage(
+    rawTheme.payment?.upiDiscountPercent,
+    null
+  );
+  const contentSource = isPlainObject(rawTheme.content) ? rawTheme.content : {};
+  const navLabels = normalizeThemeTextGroup(
+    contentSource.navLabels,
+    ["about", "menu", "gallery", "events", "testimonials", "contact", "reservation"],
+    80
+  );
+  const menuCategories = normalizeThemeTextGroup(
+    contentSource.menuCategories,
+    ["starters", "mains", "desserts", "drinks"],
+    80
+  );
+  const menuSection = normalizeThemeTextGroup(
+    contentSource.menuSection,
+    ["eyebrow", "title", "subtitle", "fullEyebrow", "fullTitle", "fullSubtitle", "viewFullMenu"],
+    320
+  );
+  const ctaLabels = normalizeThemeTextGroup(
+    contentSource.ctaLabels,
+    [
+      "heroPrimary",
+      "heroReservation",
+      "aboutReservation",
+      "cartButton",
+      "menuScrollHint",
+      "loadMore",
+      "loadMoreHint"
+    ],
+    160
+  );
+  const footerLabels = normalizeThemeTextGroup(
+    contentSource.footerLabels,
+    [
+      "exploreHeading",
+      "about",
+      "menu",
+      "gallery",
+      "events",
+      "reviews",
+      "reservationsHeading",
+      "bookTable",
+      "privateDining",
+      "contact",
+      "openingHoursHeading",
+      "findUsHeading",
+      "copyrightSuffix"
+    ],
+    160
+  );
   const aboutVisibility = normalizeThemeBoolean(rawTheme.sections?.about);
   const eventsVisibility = normalizeThemeBoolean(rawTheme.sections?.events);
   const galleryVisibility = normalizeThemeBoolean(rawTheme.sections?.gallery);
@@ -304,6 +437,40 @@ function normalizeTheme(rawTheme) {
 
   if (buttonPreset) {
     normalizedTheme.buttons = { preset: buttonPreset };
+  }
+
+  if (upiDiscountPercent !== null) {
+    normalizedTheme.payment = { upiDiscountPercent };
+  }
+
+  if (
+    Object.keys(navLabels).length ||
+    Object.keys(menuCategories).length ||
+    Object.keys(menuSection).length ||
+    Object.keys(ctaLabels).length ||
+    Object.keys(footerLabels).length
+  ) {
+    normalizedTheme.content = {};
+
+    if (Object.keys(navLabels).length) {
+      normalizedTheme.content.navLabels = navLabels;
+    }
+
+    if (Object.keys(menuCategories).length) {
+      normalizedTheme.content.menuCategories = menuCategories;
+    }
+
+    if (Object.keys(menuSection).length) {
+      normalizedTheme.content.menuSection = menuSection;
+    }
+
+    if (Object.keys(ctaLabels).length) {
+      normalizedTheme.content.ctaLabels = ctaLabels;
+    }
+
+    if (Object.keys(footerLabels).length) {
+      normalizedTheme.content.footerLabels = footerLabels;
+    }
   }
 
   normalizedTheme.loadingScreen = loadingScreen;
@@ -641,24 +808,40 @@ async function fetchJson(url) {
 }
 
 async function resolveHotelSlug() {
-  const querySlug = getHotelSlugFromQuery();
-  if (querySlug) return querySlug;
+  const querySlug = normalizeHotelSlug(getHotelSlugFromQuery());
+  if (querySlug) {
+    rememberHotelSlug(querySlug);
+    return querySlug;
+  }
 
   const host = window.location.hostname;
+  const fallbackSlug = getRuntimeDefaultHotelSlug();
 
   if (isLocalhost(host)) {
-    return FRONTEND_DEFAULT_HOTEL_SLUG;
+    if (fallbackSlug) return fallbackSlug;
+    throw new Error("Hotel slug is required. Use ?hotel=your-hotel-slug or set APP_RUNTIME_CONFIG.DEFAULT_HOTEL_SLUG.");
   }
 
   try {
     const result = await fetchJson(
       `${TENANT_API_BASE}/resolve?host=${encodeURIComponent(host)}`
     );
+    const resolvedSlug = normalizeHotelSlug(result.hotel?.slug);
 
-    return result.hotel?.slug || FRONTEND_DEFAULT_HOTEL_SLUG;
+    if (resolvedSlug) {
+      rememberHotelSlug(resolvedSlug);
+      return resolvedSlug;
+    }
+
+    if (fallbackSlug) return fallbackSlug;
+    throw new Error(`No hotel tenant resolved for host ${host}.`);
   } catch (error) {
-    console.warn("Falling back to default hotel slug:", error);
-    return FRONTEND_DEFAULT_HOTEL_SLUG;
+    if (fallbackSlug) {
+      console.warn("Falling back to configured hotel slug:", error);
+      return fallbackSlug;
+    }
+
+    throw error;
   }
 }
 
@@ -730,6 +913,7 @@ async function loadAppData() {
     ...DEFAULT_LOADING_SCREEN_CONFIG
   };
   window.APP_STATE.activeHotelSlug = hotelSlug;
+  rememberHotelSlug(hotelSlug);
   window.APP_STATE.orderContext = getOrderContextFromQuery();
 
   return window.APP_STATE;

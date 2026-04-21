@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HSR — Full Menu</title>
-  <meta name="description" content="Browse the full Hotel Sai Raj menu with search, sorting, category filters, and WhatsApp ordering." />
+  <title>Hotel Full Menu</title>
+  <meta name="description" content="Browse the full hotel menu with search, sorting, category filters, cart, and ordering options." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,600&family=Jost:wght@200;300;400;500;600&display=swap" rel="stylesheet" />
@@ -14,23 +14,36 @@
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/menu-page.css" />
 </head>
-<body class="menu-page">
+<body class="menu-page app-booting">
   <div class="cursor-dot" id="cursorDot"></div>
   <div class="cursor-ring" id="cursorRing"></div>
+
+  <div id="loader" class="loader" role="status" aria-label="Loading">
+    <div class="loader-inner">
+      <div class="loader-logo">
+        <span class="loader-a"></span><span class="loader-urum"></span>
+      </div>
+      <div class="loader-bar-wrap"><div class="loader-bar" id="loaderBar"></div></div>
+      <p class="loader-tagline">Preparing your experience…</p>
+    </div>
+  </div>
+
+  <div id="pageShell">
+
   <nav class="navbar scrolled" id="navbar" role="navigation" aria-label="Main navigation">
     <div class="nav-container">
-      <a href="index.html#hero" class="nav-logo" aria-label="HSR home">
+      <a href="index.html#hero" class="nav-logo" aria-label="Hotel home">
         <span class="logo-a">Hotel</span><span class="logo-urum"></span>
       </a>
       <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">
         <span></span><span></span><span></span>
       </button>
       <ul class="nav-links" id="navLinks" role="list">
-        <li><a href="index.html#about" class="nav-link">About</a></li>
-        <li><a href="menu.html" class="nav-link active-link">Full Menu</a></li>
-        <li><a href="index.html#events" class="nav-link">Events</a></li>
-        <li><a href="index.html#contact" class="nav-link">Contact</a></li>
-        <li><a href="index.html#reservation" class="nav-link nav-cta">Reserve a Table</a></li>
+        <li><a href="index.html#about" class="nav-link" data-nav-label="about">About</a></li>
+        <li><a href="menu.html" class="nav-link active-link" data-nav-label="menu">Full Menu</a></li>
+        <li><a href="index.html#events" class="nav-link" data-nav-label="events">Events</a></li>
+        <li><a href="index.html#contact" class="nav-link" data-nav-label="contact">Contact</a></li>
+        <li><a href="index.html#reservation" class="nav-link nav-cta" data-nav-label="reservation">Reserve a Table</a></li>
       </ul>
     </div>
   </nav>
@@ -39,18 +52,18 @@
     <section id="menu" class="menu-section section" aria-label="Restaurant Full Menu">
       <div class="container">
         <div class="section-header">
-          <p class="section-eyebrow reveal-text">Complete Selection</p>
-          <h1 class="section-title reveal-text light">Browse the Full <em>Menu</em></h1>
-          <p class="section-sub reveal-text" style="color: rgba(255,255,255,0.74); margin: 0 auto;">
+          <p class="section-eyebrow reveal-text" id="menuSectionEyebrow">Complete Selection</p>
+          <h1 class="section-title reveal-text light" id="menuSectionTitle">Browse the Full <em>Menu</em></h1>
+          <p class="section-sub reveal-text" id="menuSectionSubtitle" style="color: rgba(255,255,255,0.74); margin: 0 auto;">
             Search across categories, sort dishes, filter tags, and place your order on WhatsApp.
           </p>
         </div>
 
         <div class="menu-tabs" role="tablist" aria-label="Menu categories">
-          <button class="menu-tab active" data-cat="starters" role="tab" aria-selected="true" aria-controls="menuGrid"><i class="fas fa-seedling" aria-hidden="true"></i> Starters</button>
-          <button class="menu-tab" data-cat="mains" role="tab" aria-selected="false" aria-controls="menuGrid"><i class="fas fa-utensils" aria-hidden="true"></i> Main Course</button>
-          <button class="menu-tab" data-cat="desserts" role="tab" aria-selected="false" aria-controls="menuGrid"><i class="fas fa-ice-cream" aria-hidden="true"></i> Desserts</button>
-          <button class="menu-tab" data-cat="drinks" role="tab" aria-selected="false" aria-controls="menuGrid"><i class="fas fa-wine-glass" aria-hidden="true"></i> Beverages</button>
+          <button class="menu-tab active" data-cat="starters" role="tab" aria-selected="true" aria-controls="menuGrid"><i class="fas fa-seedling" aria-hidden="true"></i> <span data-menu-tab-label="starters">Starters</span></button>
+          <button class="menu-tab" data-cat="mains" role="tab" aria-selected="false" aria-controls="menuGrid"><i class="fas fa-utensils" aria-hidden="true"></i> <span data-menu-tab-label="mains">Main Course</span></button>
+          <button class="menu-tab" data-cat="desserts" role="tab" aria-selected="false" aria-controls="menuGrid"><i class="fas fa-ice-cream" aria-hidden="true"></i> <span data-menu-tab-label="desserts">Desserts</span></button>
+          <button class="menu-tab" data-cat="drinks" role="tab" aria-selected="false" aria-controls="menuGrid"><i class="fas fa-wine-glass" aria-hidden="true"></i> <span data-menu-tab-label="drinks">Beverages</span></button>
         </div>
 
         <div class="menu-toolbar reveal-text" data-menu-mode="full">
@@ -92,15 +105,15 @@
         <div class="menu-cart-toolbar reveal-text">
           <button id="openCartBtn" class="btn btn-primary">
             <i class="fas fa-shopping-cart" aria-hidden="true"></i>
-            <span>View Cart</span>
+            <span data-cta-label="cartButton">View Cart</span>
             <span id="cartCount" class="cart-count-badge">0</span>
           </button>
         </div>
 
-        <div id="menuScrollHint" class="menu-scroll-hint" hidden><span>Explore more dishes below</span></div>
+        <div id="menuScrollHint" class="menu-scroll-hint" hidden><span data-cta-label="menuScrollHint">Explore more dishes below</span></div>
         <div class="menu-grid" id="menuGrid" data-menu-mode="full" role="tabpanel" aria-live="polite"></div>
         <div class="menu-grid-footer">
-          <button type="button" id="menuLoadMoreBtn" class="btn btn-outline menu-load-more" hidden><span>Load More</span></button>
+          <button type="button" id="menuLoadMoreBtn" class="btn btn-outline menu-load-more" hidden><span data-cta-label="loadMore">Load More</span></button>
         </div>
       </div>
     </section>
@@ -141,7 +154,7 @@
 
         <div id="upiBox" class="upi-box" hidden>
           <div class="upi-offer-card glass-card">
-            <p class="upi-offer-badge">🎉 Pay with Google Pay and get 10% off</p>
+            <p class="upi-offer-badge" id="upiOfferBadge">Pay with Google Pay / UPI</p>
             <p class="upi-offer-note">Discount is applied only for Google Pay / UPI payments.</p>
 
             <div class="upi-summary">
@@ -150,7 +163,7 @@
                 <strong id="upiOriginalTotal">₹0</strong>
               </div>
               <div class="cart-total-row">
-                <span>Google Pay Discount (10%)</span>
+                <span id="upiDiscountLabel">Google Pay Discount</span>
                 <strong id="upiDiscountAmount">-₹0</strong>
               </div>
               <div class="cart-total-row grand">
@@ -173,7 +186,7 @@
                 UPI Link:
                 <a id="upiFallbackLink" href="#" target="_blank" rel="noopener noreferrer">Open payment manually</a>
               </p>
-              <p class="upi-line">UPI ID: <strong id="orderUpiId">hotelsairaj@upi</strong></p>
+              <p class="upi-line">UPI ID: <strong id="orderUpiId"></strong></p>
               <p class="upi-line">Amount: <strong id="upiManualAmount">₹0</strong></p>
             </div>
 
@@ -195,10 +208,12 @@
     <div class="wa-fallback__dialog glass-card" role="document">
       <button type="button" class="wa-fallback__close" aria-label="Close WhatsApp fallback dialog" data-wa-close><i class="fas fa-times" aria-hidden="true"></i></button>
       <!-- <div class="wa-fallback__icon" aria-hidden="true"><i class="fab fa-whatsapp"></i></div> -->
-      <h3 id="waFallbackTitle">In Case Whatsapp not open Please enable popups and try again</h3>
-      <!-- <p>Please enable popups and try again. You can also open WhatsApp manually using the button below.</p>
-      <a id="waFallbackLink" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-full"><span>Open WhatsApp Manually</span></a> -->
+      <h3 id="waFallbackTitle">WhatsApp could not open automatically</h3>
+      <p>Please open WhatsApp manually to send the prepared order message to the hotel.</p>
+      <a id="waFallbackLink" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-full"><span>Open WhatsApp Manually</span></a>
     </div>
+  </div>
+
   </div>
 
   <!-- <script src="js/data.js"></script> -->

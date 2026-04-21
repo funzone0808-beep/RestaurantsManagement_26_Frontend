@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════ 
-   HOTEL SAI RAJ — MAIN JAVASCRIPT
+   HOTEL PLATFORM — MAIN JAVASCRIPT
    Existing UI + Food Cart + Event Booking + WhatsApp Flow
    ═══════════════════════════════════════════════════════ */
 
@@ -10,15 +10,59 @@ const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
 let USER_LOCATION = "Not shared";
 
+function getRuntimeBooleanConfig(key, fallback = false) {
+  const value = window.APP_RUNTIME_CONFIG?.[key];
+
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    return value.trim().toLowerCase() === "true";
+  }
+
+  return fallback;
+}
+
+function getRuntimeTextConfig(key, fallback = "") {
+  const value = window.APP_RUNTIME_CONFIG?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function getDefaultBackendBaseUrl() {
+  const hostname = window.location.hostname;
+  const isLocalHost =
+    !hostname ||
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.endsWith(".localhost");
+  const baseUrl =
+    isLocalHost || !window.location.origin || window.location.origin === "null"
+      ? "http://localhost:5000"
+      : window.location.origin;
+
+  return baseUrl.replace(/\/+$/, "");
+}
+
 let CONFIG = {
   HOTEL_NAME: "",
   OWNER_WHATSAPP_NUMBER: "",
   OWNER_UPI_ID: "",
   GST_PERCENT: 5,
+  DEFAULT_UPI_DISCOUNT_PERCENT: 10,
+  PAYMENT_GATEWAY_ENABLED: getRuntimeBooleanConfig("PAYMENT_GATEWAY_ENABLED", false),
+  PAYMENT_GATEWAY_PROVIDER: getRuntimeTextConfig("PAYMENT_GATEWAY_PROVIDER", "razorpay"),
+  PAYMENT_GATEWAY_CHECKOUT_ENABLED: getRuntimeBooleanConfig(
+    "PAYMENT_GATEWAY_CHECKOUT_ENABLED",
+    false
+  ),
+  PAYMENT_GATEWAY_SCRIPT_URL: getRuntimeTextConfig(
+    "PAYMENT_GATEWAY_SCRIPT_URL",
+    "https://checkout.razorpay.com/v1/checkout.js"
+  ),
   // API_BASE_URL: "http://127.0.0.1:5000"
   API_BASE_URL:
-  window.APP_RUNTIME_CONFIG?.BACKEND_BASE_URL || "http://localhost:5000"
+  window.APP_RUNTIME_CONFIG?.BACKEND_BASE_URL || getDefaultBackendBaseUrl()
 };
+let PAYMENT_GATEWAY_READINESS = null;
+let paymentGatewayReadinessPromise = null;
 
 const DEFAULT_THEME_BRIDGE = {
   "--gold": "#c9a84c",
@@ -133,10 +177,23 @@ function applyHotelConfigFromState() {
     OWNER_WHATSAPP_NUMBER: hotel.ownerWhatsAppNumber || "",
     OWNER_UPI_ID: hotel.ownerUpiId || "",
     GST_PERCENT: Number(hotel.gstPercent || 5),
+    DEFAULT_UPI_DISCOUNT_PERCENT: 10,
+    PAYMENT_GATEWAY_ENABLED: getRuntimeBooleanConfig("PAYMENT_GATEWAY_ENABLED", false),
+    PAYMENT_GATEWAY_PROVIDER: getRuntimeTextConfig("PAYMENT_GATEWAY_PROVIDER", "razorpay"),
+    PAYMENT_GATEWAY_CHECKOUT_ENABLED: getRuntimeBooleanConfig(
+      "PAYMENT_GATEWAY_CHECKOUT_ENABLED",
+      false
+    ),
+    PAYMENT_GATEWAY_SCRIPT_URL: getRuntimeTextConfig(
+      "PAYMENT_GATEWAY_SCRIPT_URL",
+      "https://checkout.razorpay.com/v1/checkout.js"
+    ),
     // API_BASE_URL: "http://127.0.0.1:5000"
     API_BASE_URL:
-  window.APP_RUNTIME_CONFIG?.BACKEND_BASE_URL || "http://localhost:5000"
+  window.APP_RUNTIME_CONFIG?.BACKEND_BASE_URL || getDefaultBackendBaseUrl()
   };
+  PAYMENT_GATEWAY_READINESS = null;
+  paymentGatewayReadinessPromise = null;
 }
 
 function getActiveHotelName() {
@@ -177,16 +234,30 @@ function getActiveOrderContext(rawContext = window.APP_STATE?.orderContext || {}
       : tableNumber
         ? "qr"
         : "website";
+  const addToOrderId = normalizeOrderContextText(
+    context.addToOrderId || context.addToOrder || context.parentOrderId,
+    120,
+  );
+  const addToken = normalizeOrderContextText(
+    context.addToken || context.trackingToken,
+    200,
+  );
 
   return {
     orderType,
     tableNumber,
-    orderSource
+    orderSource,
+    addToOrderId,
+    addToken
   };
 }
 
 function hasDineInOrderContext(context = getActiveOrderContext()) {
   return context.orderType === "dine-in" && !!context.tableNumber;
+}
+
+function hasActiveOrderAddonContext(context = getActiveOrderContext()) {
+  return hasDineInOrderContext(context) && !!context.addToOrderId && !!context.addToken;
 }
 
 function getEffectiveCustomerAddress(value, context = getActiveOrderContext()) {
@@ -208,6 +279,7 @@ function syncOrderContextUI() {
   checkoutForm.dataset.orderType = context.orderType;
   checkoutForm.dataset.orderSource = context.orderSource;
   checkoutForm.dataset.tableNumber = context.tableNumber;
+  checkoutForm.dataset.addToOrderId = context.addToOrderId || "";
 
   if (addressInput && !addressInput.dataset.originalPlaceholder) {
     addressInput.dataset.originalPlaceholder =
@@ -249,11 +321,52 @@ function syncOrderContextUI() {
     checkoutForm.prepend(notice);
   }
 
+  const isAddonContext = hasActiveOrderAddonContext(context);
+
   notice.innerHTML = `
-    <span class="order-context-kicker">Dine-in QR order</span>
+    <span class="order-context-kicker">${isAddonContext ? "Adding to active table order" : "Dine-in QR order"}</span>
     <strong>Table ${escapeHTML(context.tableNumber)}</strong>
-    <small>We detected this table link. Normal checkout fields are still available as fallback.</small>
+    <small>${isAddonContext ? `New items will be saved as an add-on for order #${escapeHTML(context.addToOrderId)}.` : "We detected this table link. Normal checkout fields are still available as fallback."}</small>
   `;
+}
+
+function syncTableCartResumeNotice() {
+  const existingNotice = document.getElementById("tableCartResumeNotice");
+  const context = getActiveOrderContext();
+  const hasActiveTableCart =
+    hasDineInOrderContext(context) && Array.isArray(CART) && CART.length > 0;
+
+  if (!hasActiveTableCart) {
+    if (existingNotice) existingNotice.remove();
+    return;
+  }
+
+  const menuSection = document.getElementById("menu");
+  const anchor =
+    menuSection?.querySelector(".menu-cart-toolbar") ||
+    menuSection?.querySelector("#menuGrid") ||
+    menuSection?.querySelector(".menu-tabs");
+
+  if (!menuSection || !anchor?.parentElement) return;
+
+  const totalQty = CART.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+  const itemLabel = totalQty === 1 ? "item" : "items";
+  let notice = existingNotice;
+
+  if (!notice) {
+    notice = document.createElement("div");
+    notice.id = "tableCartResumeNotice";
+    notice.className = "table-cart-resume-notice";
+    notice.setAttribute("aria-live", "polite");
+  }
+
+  notice.innerHTML = `
+    <span class="order-context-kicker">Active table cart</span>
+    <strong>Table ${escapeHTML(context.tableNumber)} - ${totalQty} ${itemLabel} ready</strong>
+    <small>This cart is saved only for this table on this browser. It clears after checkout or when it becomes stale.</small>
+  `;
+
+  anchor.parentElement.insertBefore(notice, anchor);
 }
 
 function getValidThemeColor(value) {
@@ -463,6 +576,138 @@ function setText(id, value) {
   el.textContent = value || "";
 }
 
+function getSeoText(value, maxLength = 320) {
+  const text = typeof value === "string"
+    ? value.replace(/\s+/g, " ").trim()
+    : "";
+
+  return text.slice(0, maxLength);
+}
+
+function setMetaContent(selector, value) {
+  const el = document.querySelector(selector);
+  const content = getSeoText(value, 500);
+
+  if (!el || !content) return;
+
+  el.setAttribute("content", content);
+}
+
+function applySeoFromHotel(hotel = {}) {
+  const hotelName = getSeoText(hotel.hotelName, 150) || "Hotel";
+  const isMenuPage = document.body.classList.contains("menu-page");
+  const pageTitle = isMenuPage ? `${hotelName} | Full Menu` : hotelName;
+  const fallbackDescription = isMenuPage
+    ? `Browse the full menu for ${hotelName} with cart and ordering options.`
+    : `Discover ${hotelName} dining, menu, reservations, gallery, reviews, and contact details.`;
+  const description =
+    getSeoText(hotel.footer?.description, 320) ||
+    getSeoText(hotel.tagline, 320) ||
+    fallbackDescription;
+
+  document.title = pageTitle;
+  setMetaContent('meta[name="description"]', description);
+  setMetaContent('meta[property="og:title"]', pageTitle);
+  setMetaContent('meta[property="og:description"]', description);
+}
+
+function getThemeContentConfig() {
+  const content = window.APP_STATE?.theme?.content;
+  return content && typeof content === "object" ? content : {};
+}
+
+function getThemeContentText(groupName, key) {
+  const group = getThemeContentConfig()[groupName];
+  const value = group && typeof group === "object" ? group[key] : "";
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function setTextIfConfigured(selector, value) {
+  const el = document.querySelector(selector);
+  if (!el || !value) return;
+
+  el.textContent = value;
+}
+
+function applyNavLabelsFromState() {
+  document.querySelectorAll("[data-nav-label]").forEach((link) => {
+    const label = getThemeContentText("navLabels", link.dataset.navLabel);
+    if (label) {
+      link.textContent = label;
+    }
+  });
+}
+
+function applyMenuSectionCopyFromState() {
+  const menuSection = getThemeContentConfig().menuSection || {};
+  const isMenuPage = document.body.classList.contains("menu-page");
+  const eyebrow = isMenuPage
+    ? menuSection.fullEyebrow || menuSection.eyebrow
+    : menuSection.eyebrow;
+  const title = isMenuPage
+    ? menuSection.fullTitle || menuSection.title
+    : menuSection.title;
+  const subtitle = isMenuPage
+    ? menuSection.fullSubtitle || menuSection.subtitle
+    : menuSection.subtitle;
+
+  setTextIfConfigured("#menuSectionEyebrow", eyebrow);
+  setTextIfConfigured("#menuSectionTitle", title);
+  setTextIfConfigured("#menuSectionSubtitle", subtitle);
+  setTextIfConfigured("[data-menu-action-label='viewFullMenu']", menuSection.viewFullMenu);
+}
+
+function applyMenuCategoryLabelsFromState() {
+  document.querySelectorAll("[data-menu-tab-label]").forEach((labelEl) => {
+    const label = getThemeContentText("menuCategories", labelEl.dataset.menuTabLabel);
+    if (label) {
+      labelEl.textContent = label;
+    }
+  });
+}
+
+function applyCtaLabelsFromState() {
+  document.querySelectorAll("[data-cta-label]").forEach((labelEl) => {
+    const label = getThemeContentText("ctaLabels", labelEl.dataset.ctaLabel);
+    if (label) {
+      labelEl.textContent = label;
+    }
+  });
+}
+
+function applyFooterLabelsFromState() {
+  document.querySelectorAll("[data-footer-label]").forEach((labelEl) => {
+    const label = getThemeContentText("footerLabels", labelEl.dataset.footerLabel);
+    if (label) {
+      labelEl.textContent = label;
+    }
+  });
+}
+
+function applyContentLabelsFromState() {
+  applyNavLabelsFromState();
+  applyMenuSectionCopyFromState();
+  applyMenuCategoryLabelsFromState();
+  applyCtaLabelsFromState();
+  applyFooterLabelsFromState();
+}
+
+function getConfiguredMenuCategoryLabel(category) {
+  return getThemeContentText("menuCategories", category);
+}
+
+function getConfiguredCtaLabel(key) {
+  return getThemeContentText("ctaLabels", key);
+}
+
+function formatConfiguredCountLabel(template, count, fallback) {
+  if (!template) {
+    return fallback;
+  }
+
+  return template.replace(/\{count\}/g, String(count));
+}
+
 function renderHeroStats(stats = []) {
   const wrap = document.getElementById("heroStats");
   if (!wrap) return;
@@ -664,7 +909,8 @@ function renderHotelContent() {
 
   applyHeroLayoutVariantFromState();
 
-  document.title = hotel.hotelName || "Hotel Website";
+  applySeoFromHotel(hotel);
+  applyContentLabelsFromState();
 
   setText("brandPrimary", hotel.branding?.logoTextPrimary);
   setText("brandSecondary", hotel.branding?.logoTextSecondary);
@@ -716,23 +962,66 @@ if (navLogo) {
 }
 
 const CART_STORAGE_KEY = "hsr_food_cart_v1";
+const ORDER_TRACKING_STORAGE_KEY = "hsr_recent_order_tracking_v1";
+const ORDER_TRACKING_DISMISS_STORAGE_KEY = "hsr_recent_order_tracking_dismissed_v1";
+const ORDER_TRACKING_RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const ORDER_TRACKING_CLOSED_STATUSES = new Set(["completed", "cancelled", "payment_failed"]);
+const TABLE_CART_STALE_WINDOW_MS = 4 * 60 * 60 * 1000;
 let CART = [];
 
-function getCartStorageKey() {
-  const orderContext = getActiveOrderContext();
-  if (!hasDineInOrderContext(orderContext)) {
-    return CART_STORAGE_KEY;
+function normalizeCartStoragePart(value, fallback = "default") {
+  const text = String(value || "").trim();
+  return text || fallback;
+}
+
+function getCartStorageKey(orderContext = getActiveOrderContext()) {
+  const hotelSlug = normalizeCartStoragePart(getActiveHotelSlug(), "hotel");
+  const keyParts = [CART_STORAGE_KEY, hotelSlug];
+
+  if (hasDineInOrderContext(orderContext)) {
+    keyParts.push("table", normalizeCartStoragePart(orderContext.tableNumber, "unknown-table"));
+  } else {
+    keyParts.push("website");
   }
 
-  const hotelSlug = getActiveHotelSlug() || "hotel";
-  return [
-    CART_STORAGE_KEY,
-    hotelSlug,
-    "table",
-    orderContext.tableNumber
-  ]
+  return keyParts
     .map((part) => encodeURIComponent(String(part).trim()))
     .join(":");
+}
+
+function getTableCartStoragePayload(items = CART, orderContext = getActiveOrderContext()) {
+  return {
+    items: normalizeCartItems(items),
+    savedAt: new Date().toISOString(),
+    tableNumber: orderContext.tableNumber || "",
+    orderType: orderContext.orderType || "dine-in",
+    orderSource: orderContext.orderSource || "qr"
+  };
+}
+
+function getFreshStoredTableCartItems(storedCart, orderContext = getActiveOrderContext()) {
+  if (!storedCart) return [];
+
+  if (Array.isArray(storedCart)) {
+    // Legacy table carts did not include timestamps, so they cannot be proven safe for table turnover.
+    return null;
+  }
+
+  if (!storedCart || typeof storedCart !== "object" || !Array.isArray(storedCart.items)) {
+    return null;
+  }
+
+  const storedTableNumber = normalizeOrderContextText(storedCart.tableNumber, 80);
+  const savedAt = new Date(storedCart.savedAt || "").getTime();
+  const isFresh =
+    Number.isFinite(savedAt) &&
+    Date.now() - savedAt <= TABLE_CART_STALE_WINDOW_MS;
+
+  if (storedTableNumber !== orderContext.tableNumber || !isFresh) {
+    return null;
+  }
+
+  return storedCart.items;
 }
 
 /* ── Shared Helpers ─────────────────────────────────── */
@@ -1227,6 +1516,295 @@ function openWhatsAppSafely(url) {
   return tryOpenExternalLink(url);
 }
 
+function getOrderTrackingUrl(tracking = {}) {
+  const orderId = String(tracking.orderId || "").trim();
+  const hotelSlug = String(tracking.hotelSlug || getActiveHotelSlug() || "").trim();
+  const token = String(tracking.token || "").trim();
+  const path = String(tracking.path || "").trim();
+
+  if (!path && (!orderId || !hotelSlug || !token)) {
+    return "";
+  }
+
+  const trackingPath = path || `order-tracking.html?hotel=${encodeURIComponent(hotelSlug)}&order=${encodeURIComponent(orderId)}&token=${encodeURIComponent(token)}`;
+
+  try {
+    return new URL(trackingPath, window.location.href).toString();
+  } catch {
+    return trackingPath;
+  }
+}
+
+function rememberOrderTracking(tracking = {}) {
+  const trackingUrl = getOrderTrackingUrl(tracking);
+  const orderId = String(tracking.orderId || "").trim();
+  const hotelSlug = String(tracking.hotelSlug || getActiveHotelSlug() || "").trim();
+  const token = String(tracking.token || "").trim();
+  const activeOrderContext = getActiveOrderContext();
+  const tableNumber = normalizeOrderContextText(
+    tracking.tableNumber ||
+      tracking.table_number ||
+      tracking.orderContext?.tableNumber ||
+      activeOrderContext.tableNumber,
+    80,
+  );
+  const orderType = normalizeOrderContextText(
+    tracking.orderType ||
+      tracking.order_type ||
+      tracking.orderContext?.orderType ||
+      activeOrderContext.orderType,
+    40,
+  );
+  const orderSource = normalizeOrderContextText(
+    tracking.orderSource ||
+      tracking.order_source ||
+      tracking.orderContext?.orderSource ||
+      activeOrderContext.orderSource,
+    40,
+  );
+
+  if (!trackingUrl || !orderId || !hotelSlug || !token) {
+    return null;
+  }
+
+  const trackingRecord = {
+    orderId,
+    hotelSlug,
+    token,
+    url: trackingUrl,
+    orderType,
+    tableNumber,
+    orderSource,
+    savedAt: new Date().toISOString()
+  };
+
+  try {
+    const storageKey = getOrderTrackingRecordStorageKey(hotelSlug);
+    const dismissStorageKey = getOrderTrackingDismissStorageKey(hotelSlug);
+
+    if (!storageKey) return trackingRecord;
+    sessionStorage.setItem(storageKey, JSON.stringify(trackingRecord));
+    localStorage.removeItem(storageKey);
+    if (dismissStorageKey) sessionStorage.removeItem(dismissStorageKey);
+  } catch {
+    // Tracking remains available through the visible link even if storage is blocked.
+  }
+
+  return trackingRecord;
+}
+
+function removeRecentOrderTrackingShortcut() {
+  document.getElementById("recentOrderTrackingShortcut")?.remove();
+}
+
+function getOrderTrackingRecordStorageKey(hotelSlug = getActiveHotelSlug()) {
+  const normalizedHotelSlug = String(hotelSlug || "").trim();
+  return normalizedHotelSlug ? `${ORDER_TRACKING_STORAGE_KEY}:${normalizedHotelSlug}` : "";
+}
+
+function getOrderTrackingDismissStorageKey(hotelSlug = getActiveHotelSlug()) {
+  const normalizedHotelSlug = String(hotelSlug || "").trim();
+  return normalizedHotelSlug ? `${ORDER_TRACKING_DISMISS_STORAGE_KEY}:${normalizedHotelSlug}` : "";
+}
+
+function removeStoredOrderTrackingRecord(hotelSlug = getActiveHotelSlug()) {
+  const normalizedHotelSlug = String(hotelSlug || "").trim();
+  if (!normalizedHotelSlug) return;
+  const storageKey = getOrderTrackingRecordStorageKey(normalizedHotelSlug);
+  const dismissStorageKey = getOrderTrackingDismissStorageKey(normalizedHotelSlug);
+
+  try {
+    if (storageKey) {
+      sessionStorage.removeItem(storageKey);
+      localStorage.removeItem(storageKey);
+    }
+    if (dismissStorageKey) sessionStorage.removeItem(dismissStorageKey);
+  } catch {
+    // Cleaning recent tracking state is best-effort only.
+  }
+}
+
+function isClosedOrderTrackingStatus(status = "") {
+  return ORDER_TRACKING_CLOSED_STATUSES.has(String(status || "").trim().toLowerCase());
+}
+
+function getRecentOrderTrackingRecord() {
+  const hotelSlug = String(getActiveHotelSlug() || "").trim();
+  if (!hotelSlug) return null;
+
+  try {
+    const storageKey = getOrderTrackingRecordStorageKey(hotelSlug);
+    const dismissStorageKey = getOrderTrackingDismissStorageKey(hotelSlug);
+    const rawRecord = storageKey ? sessionStorage.getItem(storageKey) : "";
+    if (storageKey && !rawRecord) {
+      localStorage.removeItem(storageKey);
+    }
+    if (!rawRecord) return null;
+
+    const record = JSON.parse(rawRecord);
+    const orderId = String(record?.orderId || "").trim();
+    const recordHotelSlug = String(record?.hotelSlug || "").trim();
+    const token = String(record?.token || "").trim();
+    const url = String(record?.url || "").trim();
+    const savedAt = new Date(record?.savedAt || "").getTime();
+    const status = String(record?.status || "").trim();
+    const orderType = normalizeOrderContextText(record?.orderType || record?.order_type, 40);
+    const tableNumber = normalizeOrderContextText(record?.tableNumber || record?.table_number, 80);
+    const orderSource = normalizeOrderContextText(record?.orderSource || record?.order_source, 40);
+    const activeOrderContext = getActiveOrderContext();
+    const isExpired =
+      !Number.isFinite(savedAt) ||
+      Date.now() - savedAt > ORDER_TRACKING_RECENT_WINDOW_MS;
+
+    if (
+      hasDineInOrderContext(activeOrderContext) &&
+      tableNumber !== activeOrderContext.tableNumber
+    ) {
+      return null;
+    }
+
+    if (
+      !orderId ||
+      recordHotelSlug !== hotelSlug ||
+      !token ||
+      !url ||
+      isExpired ||
+      isClosedOrderTrackingStatus(status)
+    ) {
+      removeStoredOrderTrackingRecord(hotelSlug);
+      return null;
+    }
+
+    const dismissedOrderId = dismissStorageKey
+      ? sessionStorage.getItem(dismissStorageKey)
+      : "";
+
+    if (dismissedOrderId === orderId) {
+      return null;
+    }
+
+    return {
+      orderId,
+      hotelSlug: recordHotelSlug,
+      token,
+      url,
+      savedAt: record.savedAt || "",
+      orderType,
+      tableNumber,
+      orderSource,
+      status
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function validateRecentOrderTrackingShortcut(trackingRecord = {}) {
+  const hotelSlug = String(trackingRecord.hotelSlug || "").trim();
+  const orderId = String(trackingRecord.orderId || "").trim();
+  const token = String(trackingRecord.token || "").trim();
+
+  if (!hotelSlug || !orderId || !token) return;
+
+  try {
+    const response = await fetch(
+      `${CONFIG.API_BASE_URL}/api/order-tracking/${encodeURIComponent(hotelSlug)}/${encodeURIComponent(orderId)}?token=${encodeURIComponent(token)}`
+    );
+
+    if (response.status === 404 || response.status === 410) {
+      removeStoredOrderTrackingRecord(hotelSlug);
+      removeRecentOrderTrackingShortcut();
+      return;
+    }
+
+    const data = await response.json().catch(() => ({}));
+    const status = data?.order?.status || "";
+
+    if (response.ok && data?.success !== false && isClosedOrderTrackingStatus(status)) {
+      removeStoredOrderTrackingRecord(hotelSlug);
+      removeRecentOrderTrackingShortcut();
+    }
+  } catch {
+    // If the network is unavailable, keep the shortcut instead of hiding a valid order.
+  }
+}
+
+function renderRecentOrderTrackingShortcut() {
+  const trackingRecord = getRecentOrderTrackingRecord();
+  removeRecentOrderTrackingShortcut();
+
+  if (!trackingRecord) return;
+  validateRecentOrderTrackingShortcut(trackingRecord);
+
+  const shortcut = document.createElement("div");
+  shortcut.id = "recentOrderTrackingShortcut";
+  shortcut.className = "recent-order-tracking-shortcut";
+  shortcut.innerHTML = `
+    <a href="${escapeAttr(trackingRecord.url)}" class="recent-order-tracking-shortcut__link" aria-label="Track recent order ${escapeAttr(trackingRecord.orderId)}">
+      <span class="recent-order-tracking-shortcut__icon"><i class="fas fa-receipt" aria-hidden="true"></i></span>
+      <span>
+        <small>Recent order</small>
+        <strong>Track #${escapeHTML(trackingRecord.orderId)}</strong>
+      </span>
+    </a>
+    <button type="button" class="recent-order-tracking-shortcut__close" aria-label="Hide recent order tracking">&times;</button>
+  `;
+
+  shortcut
+    .querySelector(".recent-order-tracking-shortcut__close")
+    ?.addEventListener("click", () => {
+      try {
+        const dismissStorageKey = getOrderTrackingDismissStorageKey(trackingRecord.hotelSlug);
+        if (dismissStorageKey) sessionStorage.setItem(dismissStorageKey, trackingRecord.orderId);
+      } catch {
+        // Hiding the shortcut is non-critical.
+      }
+
+      shortcut.remove();
+    });
+
+  document.body.appendChild(shortcut);
+}
+
+function showOrderTrackingPrompt(tracking = {}, message = "Your order was saved. You can now track it live.") {
+  const trackingRecord = rememberOrderTracking(tracking);
+  if (!trackingRecord) return;
+
+  removeRecentOrderTrackingShortcut();
+  let prompt = document.getElementById("orderTrackingPrompt");
+
+  if (!prompt) {
+    prompt = document.createElement("div");
+    prompt.id = "orderTrackingPrompt";
+    prompt.className = "order-tracking-prompt glass-card";
+    prompt.setAttribute("role", "status");
+    prompt.setAttribute("aria-live", "polite");
+    document.body.appendChild(prompt);
+  }
+
+  prompt.innerHTML = `
+    <div class="order-tracking-prompt__content">
+      <span class="order-tracking-prompt__kicker">Order #${escapeHTML(trackingRecord.orderId)}</span>
+      <strong>${escapeHTML(message)}</strong>
+    </div>
+    <div class="order-tracking-prompt__actions">
+      <a class="btn btn-primary" href="${escapeAttr(trackingRecord.url)}" target="_blank" rel="noopener noreferrer">Track Order</a>
+      <button type="button" class="order-tracking-prompt__close" aria-label="Dismiss tracking link">&times;</button>
+    </div>
+  `;
+
+  prompt.hidden = false;
+  prompt.classList.add("is-visible");
+
+  prompt
+    .querySelector(".order-tracking-prompt__close")
+    ?.addEventListener("click", () => {
+      prompt.classList.remove("is-visible");
+      prompt.hidden = true;
+      renderRecentOrderTrackingShortcut();
+    }, { once: true });
+}
+
 function flattenMenuData() {
   const menuData = getMenuData();
 
@@ -1281,17 +1859,56 @@ function normalizeCartItems(items = []) {
 }
 
 function loadCart() {
+  const orderContext = getActiveOrderContext();
+  const storageKey = getCartStorageKey(orderContext);
+
   try {
-    const storedCart = JSON.parse(localStorage.getItem(getCartStorageKey())) || [];
-    CART = normalizeCartItems(storedCart);
+    const rawCart = localStorage.getItem(storageKey);
+    if (!rawCart) {
+      CART = [];
+      return;
+    }
+
+    const storedCart = JSON.parse(rawCart);
+
+    if (hasDineInOrderContext(orderContext)) {
+      const tableCartItems = getFreshStoredTableCartItems(storedCart, orderContext);
+
+      if (tableCartItems === null) {
+        localStorage.removeItem(storageKey);
+        CART = [];
+        return;
+      }
+
+      CART = normalizeCartItems(tableCartItems);
+      return;
+    }
+
+    CART = normalizeCartItems(Array.isArray(storedCart) ? storedCart : storedCart?.items || []);
   } catch {
     CART = [];
   }
 }
 
 function saveCart() {
+  const orderContext = getActiveOrderContext();
+  const storageKey = getCartStorageKey(orderContext);
   CART = normalizeCartItems(CART);
-  localStorage.setItem(getCartStorageKey(), JSON.stringify(CART));
+
+  try {
+    if (!CART.length) {
+      localStorage.removeItem(storageKey);
+      return;
+    }
+
+    const storagePayload = hasDineInOrderContext(orderContext)
+      ? getTableCartStoragePayload(CART, orderContext)
+      : CART;
+
+    localStorage.setItem(storageKey, JSON.stringify(storagePayload));
+  } catch {
+    // Cart storage is best-effort; the in-memory cart remains available for this page.
+  }
 }
 
 function getCartItem(id) {
@@ -1354,15 +1971,35 @@ function calculateCartTotals(items = CART) {
   return { subtotal, gst, total };
 }
 
+function getUpiDiscountPercent() {
+  const candidate = Number(window.APP_STATE?.theme?.payment?.upiDiscountPercent);
+
+  if (Number.isFinite(candidate)) {
+    return Math.min(Math.max(candidate, 0), 100);
+  }
+
+  return Number(CONFIG.DEFAULT_UPI_DISCOUNT_PERCENT || 10);
+}
+
+function formatDiscountPercent(percent) {
+  const safePercent = Number.isFinite(Number(percent)) ? Number(percent) : 0;
+
+  return Number.isInteger(safePercent)
+    ? `${safePercent}%`
+    : `${safePercent.toFixed(2).replace(/\.?0+$/, "")}%`;
+}
+
 function calculatePayableAmounts(items = CART) {
   const { subtotal, gst, total: normalTotal } = calculateCartTotals(items);
-  const gpayDiscount = Math.round(normalTotal * 0.1);
+  const upiDiscountPercent = getUpiDiscountPercent();
+  const gpayDiscount = Math.round((normalTotal * upiDiscountPercent) / 100);
   const gpayFinalTotal = Math.max(0, normalTotal - gpayDiscount);
 
   return {
     subtotal,
     gst,
     normalTotal,
+    upiDiscountPercent,
     gpayDiscount,
     gpayFinalTotal,
   };
@@ -1371,13 +2008,52 @@ function calculatePayableAmounts(items = CART) {
 function buildUpiLink(amount) {
   const params = new URLSearchParams({
     pa: CONFIG.OWNER_UPI_ID || "",
-    pn: getActiveHotelName() || "Hotel Sai Raj",
+    pn: getActiveHotelName() || "Hotel",
     tn: "Food Order",
     am: Number(amount || 0).toFixed(0),
     cu: "INR",
   });
 
   return `upi://pay?${params.toString()}`;
+}
+
+function isLikelyMobileUpiDevice() {
+  const userAgent = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  const isTouchIpad =
+    platform === "MacIntel" && Number(navigator.maxTouchPoints || 0) > 1;
+
+  return /Android|iPhone|iPad|iPod/i.test(userAgent) || isTouchIpad;
+}
+
+function revealUpiFallbackBox() {
+  const fallbackBox = document.getElementById("upiFallbackBox");
+
+  if (fallbackBox) {
+    fallbackBox.hidden = false;
+  }
+}
+
+async function copyOwnerUpiIdToClipboard() {
+  const upiId = CONFIG.OWNER_UPI_ID || "";
+
+  if (!upiId || !navigator.clipboard?.writeText) {
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.writeText(upiId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function showManualUpiFallback(message) {
+  revealUpiFallbackBox();
+  const copied = await copyOwnerUpiIdToClipboard();
+
+  showToast(copied ? `${message} UPI ID copied.` : message);
 }
 
 function buildOrderSummaryText({
@@ -1393,10 +2069,11 @@ function buildOrderSummaryText({
   orderContext = getActiveOrderContext(),
 }) {
   const safeItems = normalizeCartItems(items);
-  const { subtotal, gst, normalTotal, gpayDiscount, gpayFinalTotal } =
+  const { subtotal, gst, normalTotal, upiDiscountPercent, gpayDiscount, gpayFinalTotal } =
     calculatePayableAmounts(safeItems);
 
   const isUpi = paymentMethod === "UPI";
+  const isOnlineGateway = paymentMethod === "ONLINE_GATEWAY";
   const hotelName = getActiveHotelName();
   const activeOrderContext = getActiveOrderContext(orderContext);
 
@@ -1409,6 +2086,9 @@ function buildOrderSummaryText({
 
   if (hasDineInOrderContext(activeOrderContext)) {
     lines.push("Order Type: Dine-in");
+    if (hasActiveOrderAddonContext(activeOrderContext)) {
+      lines.push(`Add-on For Order: #${activeOrderContext.addToOrderId}`);
+    }
     lines.push(`Table: ${activeOrderContext.tableNumber}`);
     lines.push(
       `Source: ${activeOrderContext.orderSource === "qr" ? "QR code" : activeOrderContext.orderSource}`,
@@ -1433,13 +2113,19 @@ function buildOrderSummaryText({
   if (isUpi) {
     lines.push(` Original Total = ${formatCurrency(normalTotal)}`);
     lines.push(
-      ` Google Pay Discount (10%) = -${formatCurrency(gpayDiscount)}`,
+      ` Google Pay Discount (${formatDiscountPercent(upiDiscountPercent)}) = -${formatCurrency(gpayDiscount)}`,
     );
     lines.push(` Final Paid Amount = ${formatCurrency(gpayFinalTotal)}`);
     lines.push(" Payment Method = Google Pay / UPI");
     lines.push(` UPI ID = ${CONFIG.OWNER_UPI_ID}`);
     lines.push(
       ` Payment Status = ${paymentConfirmed ? "Confirmed" : "Pending"}`,
+    );
+  } else if (isOnlineGateway) {
+    lines.push(` Total = ${formatCurrency(normalTotal)}`);
+    lines.push(" Payment Method = Secure Online Payment");
+    lines.push(
+      ` Payment Status = ${paymentConfirmed ? "Paid (Verified)" : "Pending Gateway Payment"}`,
     );
   } else {
     lines.push(` Total = ${formatCurrency(normalTotal)}`);
@@ -1621,10 +2307,18 @@ async function postJSON(url, payload) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    const validationDetails = Array.isArray(data.errors) && data.errors.length
-      ? ` (${data.errors.join("; ")})`
+    const validationMessages = Array.isArray(data.errors) && data.errors.length
+      ? data.errors
+      : Array.isArray(data.details)
+        ? data.details.map((detail) => detail?.message).filter(Boolean)
+        : [];
+    const validationDetails = validationMessages.length
+      ? ` (${validationMessages.join("; ")})`
       : "";
-    throw new Error(`${data.message || "Request failed"}${validationDetails}`);
+    const error = new Error(`${data.message || "Request failed"}${validationDetails}`);
+    error.status = res.status;
+    error.response = data;
+    throw error;
   }
 
   return data;
@@ -1694,6 +2388,7 @@ function updateCartUI() {
       selectedPaymentMethod === "UPI" ? gpayFinalTotal : normalTotal,
     );
   }
+  syncTableCartResumeNotice();
   if (!cartItemsWrap) return;
 
   if (!CART.length) {
@@ -1762,25 +2457,33 @@ function bindCartDelegation() {
   if (!loader || !bar) return;
 
   let progress = 0;
+  let finished = false;
+
+  const finishLoader = () => {
+    if (finished) return;
+    finished = true;
+    clearInterval(interval);
+    bar.style.width = "100%";
+
+    setTimeout(() => {
+      loader.classList.add("hidden");
+      document.body.style.overflow = "";
+      document
+        .querySelectorAll("[data-anim]")
+        .forEach((el) => el.classList.add("anim-ready"));
+    }, 180);
+  };
+
   const interval = setInterval(() => {
+    const maxProgress = document.body.classList.contains("app-ready") ? 100 : 92;
     progress += Math.random() * 18;
-    if (progress >= 100) {
-      progress = 100;
-      clearInterval(interval);
-    }
+    if (progress >= maxProgress) progress = maxProgress;
     bar.style.width = progress + "%";
 
-    if (progress === 100) {
-      setTimeout(() => {
-        loader.classList.add("hidden");
-        document.body.style.overflow = "";
-        document
-          .querySelectorAll("[data-anim]")
-          .forEach((el) => el.classList.add("anim-ready"));
-      }, 600);
-    }
+    if (progress === 100) finishLoader();
   }, 100);
 
+  document.addEventListener("app:ready", finishLoader, { once: true });
   document.body.style.overflow = "hidden";
 })();
 
@@ -1956,6 +2659,8 @@ function initMenuAndCart() {
   const payWithGpayBtn = $("#payWithGpayBtn");
   const upiOriginalTotalEl = $("#upiOriginalTotal");
   const upiDiscountAmountEl = $("#upiDiscountAmount");
+  const upiDiscountLabelEl = $("#upiDiscountLabel");
+  const upiOfferBadgeEl = $("#upiOfferBadge");
   const upiFinalAmountEl = $("#upiFinalAmount");
   const upiFallbackBox = $("#upiFallbackBox");
   const upiFallbackLink = $("#upiFallbackLink");
@@ -1976,6 +2681,12 @@ function initMenuAndCart() {
     .filter(Boolean);
 
   function getCategoryLabel(category) {
+    const configuredLabel = getConfiguredMenuCategoryLabel(category);
+
+    if (configuredLabel) {
+      return configuredLabel;
+    }
+
     if (CATEGORY_LABELS[category]) {
       return CATEGORY_LABELS[category];
     }
@@ -2069,6 +2780,7 @@ function initMenuAndCart() {
     visibleCount: menuMode === "preview" ? previewLimit : 8,
   };
   let pendingMenuGridFocusSelectors = [];
+  let paymentGatewayScriptPromise = null;
 
   function shouldUsePreviewMode() {
     return menuMode === "preview";
@@ -2131,6 +2843,536 @@ function initMenuAndCart() {
     return $('input[name="paymentMethod"]:checked')?.value || "COD";
   }
 
+  function isPaymentGatewayBridgeEnabled(paymentMethod = getSelectedPaymentMethod()) {
+    const provider = String(CONFIG.PAYMENT_GATEWAY_PROVIDER || "").trim().toLowerCase();
+    return (
+      CONFIG.PAYMENT_GATEWAY_ENABLED === true &&
+      provider === "razorpay" &&
+      paymentMethod === "ONLINE_GATEWAY"
+    );
+  }
+
+  function getPaymentGatewayReadinessState() {
+    return PAYMENT_GATEWAY_READINESS &&
+      typeof PAYMENT_GATEWAY_READINESS === "object"
+      ? PAYMENT_GATEWAY_READINESS
+      : {};
+  }
+
+  function isPaymentGatewayBackendReady() {
+    return getPaymentGatewayReadinessState().checkoutAvailable === true;
+  }
+
+  async function refreshPaymentGatewayReadiness() {
+    if (!CONFIG.PAYMENT_GATEWAY_ENABLED) {
+      PAYMENT_GATEWAY_READINESS = {
+        checkoutAvailable: false,
+        reason: "frontend_disabled"
+      };
+      return PAYMENT_GATEWAY_READINESS;
+    }
+
+    if (paymentGatewayReadinessPromise) {
+      return paymentGatewayReadinessPromise;
+    }
+
+    paymentGatewayReadinessPromise = fetch(`${CONFIG.API_BASE_URL}/api/payments/readiness`)
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || data?.success === false) {
+          throw new Error(data?.message || "Payment readiness check failed.");
+        }
+
+        PAYMENT_GATEWAY_READINESS = data.paymentGateway || {
+          checkoutAvailable: false,
+          reason: "invalid_readiness_response"
+        };
+
+        return PAYMENT_GATEWAY_READINESS;
+      })
+      .catch((error) => {
+        console.warn("Payment gateway readiness unavailable:", error);
+        PAYMENT_GATEWAY_READINESS = {
+          checkoutAvailable: false,
+          reason: "readiness_check_failed"
+        };
+        return PAYMENT_GATEWAY_READINESS;
+      })
+      .finally(() => {
+        paymentGatewayReadinessPromise = null;
+      });
+
+    return paymentGatewayReadinessPromise;
+  }
+
+  function isPaymentGatewaySubmitImplemented() {
+    return true;
+  }
+
+  function isPaymentGatewayCheckoutReady(paymentMethod = getSelectedPaymentMethod()) {
+    return (
+      isPaymentGatewayBridgeEnabled(paymentMethod) &&
+      CONFIG.PAYMENT_GATEWAY_CHECKOUT_ENABLED === true &&
+      isPaymentGatewaySubmitImplemented() &&
+      isPaymentGatewayBackendReady()
+    );
+  }
+
+  function getGatewayPaymentMethodLabel(paymentMethod = getSelectedPaymentMethod()) {
+    if (paymentMethod === "UPI") return "Google Pay / UPI";
+    if (paymentMethod === "ONLINE_GATEWAY") return "Online Payment";
+    return paymentMethod || "Online Payment";
+  }
+
+  function ensurePaymentGatewayOption() {
+    if (!checkoutForm || !CONFIG.PAYMENT_GATEWAY_ENABLED) return null;
+
+    const paymentBox = $(".payment-box", checkoutForm);
+    const upiInput = $('input[name="paymentMethod"][value="UPI"]', paymentBox || checkoutForm);
+    const upiLabel = upiInput?.closest("label");
+
+    if (!paymentBox || !upiLabel) return null;
+
+    let gatewayOption = $("#paymentGatewayOption", paymentBox);
+    if (!gatewayOption) {
+      gatewayOption = document.createElement("label");
+      gatewayOption.id = "paymentGatewayOption";
+      gatewayOption.className = "payment-option payment-gateway-option";
+      gatewayOption.innerHTML = `
+        <input type="radio" name="paymentMethod" value="ONLINE_GATEWAY" />
+        <span class="payment-gateway-copy">
+          <strong>Secure Online Payment</strong>
+          <small>Test gateway bridge. Manual UPI stays available as fallback.</small>
+        </span>
+      `;
+      upiLabel.insertAdjacentElement("afterend", gatewayOption);
+    }
+
+    let gatewayBox = $("#paymentGatewayBox", paymentBox);
+    if (!gatewayBox) {
+      gatewayBox = document.createElement("div");
+      gatewayBox.id = "paymentGatewayBox";
+      gatewayBox.className = "payment-gateway-box";
+      gatewayBox.hidden = true;
+      gatewayBox.innerHTML = `
+        <p class="payment-gateway-status">Secure online payment is staged in test mode.</p>
+        <p class="payment-gateway-note">
+          We will open the verified gateway checkout in the next step. Until then, COD and manual Google Pay / UPI remain the live options.
+        </p>
+      `;
+      gatewayOption.insertAdjacentElement("afterend", gatewayBox);
+    }
+
+    return gatewayOption;
+  }
+
+  function syncPaymentGatewayOptionUI(paymentMethod = getSelectedPaymentMethod()) {
+    const gatewayOption = $("#paymentGatewayOption", checkoutForm || document);
+    const gatewayBox = $("#paymentGatewayBox", checkoutForm || document);
+    const gatewayInput = gatewayOption?.querySelector('input[name="paymentMethod"]');
+    const shouldShowGatewayOption = CONFIG.PAYMENT_GATEWAY_ENABLED === true;
+    const isCheckoutReady = isPaymentGatewayCheckoutReady("ONLINE_GATEWAY");
+    const isGatewaySelected = paymentMethod === "ONLINE_GATEWAY";
+
+    if (gatewayOption) {
+      gatewayOption.hidden = !shouldShowGatewayOption;
+      gatewayOption.classList.toggle("is-disabled", shouldShowGatewayOption && !isCheckoutReady);
+    }
+
+    if (gatewayInput) {
+      gatewayInput.disabled = !shouldShowGatewayOption || !isCheckoutReady;
+    }
+
+    if (gatewayBox) {
+      gatewayBox.hidden = !shouldShowGatewayOption || !isGatewaySelected;
+    }
+  }
+
+  function getGatewayOrderContextPayload(orderContext = getActiveOrderContext()) {
+    return {
+      orderType: orderContext.orderType || "standard",
+      tableNumber: orderContext.tableNumber || "",
+      orderSource: orderContext.orderSource || "website"
+    };
+  }
+
+  function buildPaymentGatewayInitPayload({
+    normalizedCart,
+    paymentMethod,
+    customerName,
+    customerPhone,
+    customerAddress,
+    note,
+    summaryText,
+    orderContext
+  }) {
+    return {
+      hotelSlug: getActiveHotelSlug(),
+      paymentMethod: getGatewayPaymentMethodLabel(paymentMethod),
+      items: normalizedCart.map((item) => ({
+        id: item.id,
+        qty: item.qty
+      })),
+      orderContext: getGatewayOrderContextPayload(orderContext),
+      orderDraft: {
+        hotelName: getActiveHotelName(),
+        customerName,
+        customerPhone,
+        customerAddress,
+        note,
+        whatsappMessage: summaryText
+      }
+    };
+  }
+
+  async function initPaymentGatewayDraft(initPayload) {
+    return postJSON("/api/payments/init", initPayload);
+  }
+
+  function getGatewayLinkedOrderId(order) {
+    return order?.id === undefined || order?.id === null
+      ? ""
+      : String(order.id).trim();
+  }
+
+  async function recordPaymentGatewayFailure({
+    order,
+    gatewayOrderId,
+    gatewayPaymentId = "",
+    reason = "",
+    errorCode = "",
+    errorSource = "",
+    errorStep = ""
+  }) {
+    const orderId = getGatewayLinkedOrderId(order);
+    const linkedGatewayOrderId = gatewayOrderId || "";
+
+    if (!orderId || !linkedGatewayOrderId) {
+      return null;
+    }
+
+    try {
+      return await postJSON("/api/payments/fail", {
+        hotelSlug: getActiveHotelSlug(),
+        orderId,
+        gatewayOrderId: linkedGatewayOrderId,
+        gatewayPaymentId,
+        reason,
+        errorCode,
+        errorSource,
+        errorStep
+      });
+    } catch (error) {
+      console.warn("Payment failure could not be recorded:", error);
+      return null;
+    }
+  }
+
+  async function reconcilePaymentGatewayOrder({
+    order,
+    gatewayOrderId
+  }) {
+    const orderId = getGatewayLinkedOrderId(order);
+    const linkedGatewayOrderId = gatewayOrderId || "";
+
+    if (!orderId || !linkedGatewayOrderId) {
+      return null;
+    }
+
+    try {
+      return await postJSON("/api/payments/reconcile", {
+        hotelSlug: getActiveHotelSlug(),
+        orderId,
+        gatewayOrderId: linkedGatewayOrderId
+      });
+    } catch (error) {
+      console.warn("Payment reconciliation failed:", error);
+      return null;
+    }
+  }
+
+  function loadPaymentGatewayScript() {
+    if (window.Razorpay) {
+      return Promise.resolve(window.Razorpay);
+    }
+
+    if (paymentGatewayScriptPromise) {
+      return paymentGatewayScriptPromise;
+    }
+
+    paymentGatewayScriptPromise = new Promise((resolve, reject) => {
+      const scriptUrl =
+        CONFIG.PAYMENT_GATEWAY_SCRIPT_URL ||
+        "https://checkout.razorpay.com/v1/checkout.js";
+      let script = document.querySelector('script[data-payment-gateway="razorpay"]');
+
+      const handleLoad = () => {
+        if (window.Razorpay) {
+          resolve(window.Razorpay);
+          return;
+        }
+
+        reject(new Error("Payment gateway checkout did not load correctly."));
+      };
+      const handleError = () => {
+        paymentGatewayScriptPromise = null;
+        reject(new Error("Unable to load payment gateway checkout."));
+      };
+
+      if (!script) {
+        script = document.createElement("script");
+        script.src = scriptUrl;
+        script.async = true;
+        script.dataset.paymentGateway = "razorpay";
+        script.addEventListener("load", handleLoad, { once: true });
+        script.addEventListener("error", handleError, { once: true });
+        document.head.appendChild(script);
+        return;
+      }
+
+      script.addEventListener("load", handleLoad, { once: true });
+      script.addEventListener("error", handleError, { once: true });
+    });
+
+    return paymentGatewayScriptPromise;
+  }
+
+  function openPaymentGatewayCheckout({
+    RazorpayCheckout,
+    payment,
+    order,
+    customerName,
+    customerPhone,
+    customerAddress,
+    note,
+    summaryText,
+    orderContext
+  }) {
+    return new Promise((resolve, reject) => {
+      const gatewayOrderId = payment?.gatewayOrderId || "";
+      let checkoutSettled = false;
+
+      const resolveOnce = (value) => {
+        if (checkoutSettled) return;
+        checkoutSettled = true;
+        resolve(value);
+      };
+
+      const rejectOnce = async (error, failurePayload = null) => {
+        if (checkoutSettled) return;
+        checkoutSettled = true;
+
+        if (failurePayload) {
+          await recordPaymentGatewayFailure(failurePayload);
+        }
+
+        reject(error);
+      };
+      const resolveWithPaidGatewayResult = (verifyResult, response = {}) => {
+        resolveOnce({
+          verifyResult,
+          response,
+          summaryText,
+          customerAddress,
+          note
+        });
+      };
+
+      if (!RazorpayCheckout || !gatewayOrderId || !payment?.keyId) {
+        reject(new Error("Payment gateway order is incomplete."));
+        return;
+      }
+
+      const checkout = new RazorpayCheckout({
+        key: payment.keyId,
+        amount: payment.amountMinor,
+        currency: payment.currency || "INR",
+        name: getActiveHotelName() || "Hotel",
+        description: "Food order payment",
+        order_id: gatewayOrderId,
+        prefill: {
+          name: customerName,
+          contact: customerPhone
+        },
+        notes: {
+          hotelSlug: getActiveHotelSlug(),
+          orderId: getGatewayLinkedOrderId(order),
+          tableNumber: orderContext?.tableNumber || "",
+          orderSource: orderContext?.orderSource || "website"
+        },
+        theme: {
+          color: "#c9a84c"
+        },
+        modal: {
+          ondismiss: async () => {
+            const reconcileResult = await reconcilePaymentGatewayOrder({
+              order,
+              gatewayOrderId
+            });
+
+            if (reconcileResult?.orderUpdated) {
+              resolveWithPaidGatewayResult(reconcileResult, {
+                razorpay_order_id: gatewayOrderId,
+                razorpay_payment_id: reconcileResult.payment?.gatewayPaymentId || ""
+              });
+              return;
+            }
+
+            rejectOnce(new Error("Payment was cancelled."), {
+              order,
+              gatewayOrderId,
+              reason: "checkout_dismissed",
+              errorStep: "checkout_modal"
+            });
+          }
+        },
+        handler: async (response) => {
+          try {
+            const verifyResult = await postJSON("/api/payments/verify", {
+              hotelSlug: getActiveHotelSlug(),
+              orderId: getGatewayLinkedOrderId(order),
+              gatewayOrderId: response.razorpay_order_id || gatewayOrderId,
+              gatewayPaymentId: response.razorpay_payment_id || "",
+              gatewaySignature: response.razorpay_signature || ""
+            });
+
+            resolveWithPaidGatewayResult(verifyResult, response);
+          } catch (error) {
+            const reconcileResult = await reconcilePaymentGatewayOrder({
+              order,
+              gatewayOrderId
+            });
+
+            if (reconcileResult?.orderUpdated) {
+              resolveWithPaidGatewayResult(reconcileResult, {
+                razorpay_order_id: gatewayOrderId,
+                razorpay_payment_id: reconcileResult.payment?.gatewayPaymentId || ""
+              });
+              return;
+            }
+
+            rejectOnce(error);
+          }
+        }
+      });
+
+      checkout.on("payment.failed", (response) => {
+        const gatewayError = response?.error || {};
+        const gatewayMetadata = gatewayError.metadata || {};
+        const message =
+          gatewayError.description ||
+          gatewayError.reason ||
+          "Payment failed. Please try again or use COD / manual UPI.";
+        rejectOnce(new Error(message), {
+          order,
+          gatewayOrderId: gatewayMetadata.order_id || gatewayOrderId,
+          gatewayPaymentId: gatewayMetadata.payment_id || "",
+          reason: message,
+          errorCode: gatewayError.code || "",
+          errorSource: gatewayError.source || "",
+          errorStep: gatewayError.step || ""
+        });
+      });
+
+      checkout.open();
+    });
+  }
+
+  async function handlePaymentGatewayCheckout({
+    normalizedCart,
+    paymentMethod,
+    customerName,
+    customerPhone,
+    customerAddress,
+    note,
+    summaryText,
+    orderContext
+  }) {
+    showToast("Preparing secure payment...");
+
+    const initPayload = buildPaymentGatewayInitPayload({
+      normalizedCart,
+      paymentMethod,
+      customerName,
+      customerPhone,
+      customerAddress,
+      note,
+      summaryText,
+      orderContext
+    });
+    const initResult = await initPaymentGatewayDraft(initPayload);
+    const linkedOrder = initResult?.order || null;
+
+    if (!initResult?.orderLinked || !linkedOrder?.id) {
+      throw new Error(
+        "Secure payment could not prepare the order. Please use COD or Google Pay / UPI."
+      );
+    }
+
+    const RazorpayCheckout = await loadPaymentGatewayScript();
+    const checkoutResult = await openPaymentGatewayCheckout({
+      RazorpayCheckout,
+      payment: initResult.payment,
+      order: linkedOrder,
+      customerName,
+      customerPhone,
+      customerAddress,
+      note,
+      summaryText,
+      orderContext
+    });
+
+    if (!checkoutResult?.verifyResult?.orderUpdated) {
+      throw new Error(
+        "Payment was verified, but the order could not be marked paid. Please contact the hotel."
+      );
+    }
+
+    const paidSummaryText = buildOrderSummaryText({
+      customerName,
+      customerPhone,
+      customerAddress,
+      customerTableNote: hasDineInOrderContext(orderContext)
+        ? document.getElementById("orderAddress")?.value.trim() || ""
+        : "",
+      locationLink: USER_LOCATION || "Permission denied",
+      paymentMethod,
+      note,
+      paymentConfirmed: true,
+      items: normalizedCart,
+      orderContext
+    });
+    const activeHotelWhatsappLink = cleanPhone(CONFIG.OWNER_WHATSAPP_NUMBER)
+      ? ownerWhatsAppLink(paidSummaryText)
+      : "";
+
+    CART = [];
+    saveCart();
+    updateCartUI();
+    renderMenu(MENU_STATE.activeCategory);
+
+    if (checkoutForm) {
+      checkoutForm.reset();
+    }
+
+    const codInput = document.querySelector('input[name="paymentMethod"][value="COD"]');
+    if (codInput) codInput.checked = true;
+
+    closeCartDrawer();
+    updatePaymentUI();
+    openWhatsAppSafely(activeHotelWhatsappLink || ownerWhatsAppLink(paidSummaryText));
+    showOrderTrackingPrompt(
+      initResult?.tracking,
+      "Payment verified. Your live order tracking link is ready."
+    );
+    showToast(
+      initResult?.trackingReady
+        ? "Payment verified. Tracking link is ready."
+        : "Payment verified and order sent to WhatsApp."
+    );
+  }
+
   function updateOrderPreview() {
     if (!orderPreview) return;
 
@@ -2166,8 +3408,16 @@ function initMenuAndCart() {
   function updatePaymentUI() {
     const paymentMethod = getSelectedPaymentMethod();
     const isUpi = paymentMethod === "UPI";
-    const { normalTotal, gpayDiscount, gpayFinalTotal } =
+    const isGatewayBridgeReady = isPaymentGatewayBridgeEnabled(paymentMethod);
+    const { normalTotal, upiDiscountPercent, gpayDiscount, gpayFinalTotal } =
       calculatePayableAmounts();
+
+    syncPaymentGatewayOptionUI(paymentMethod);
+
+    if (checkoutForm) {
+      checkoutForm.dataset.paymentGatewayReady = isGatewayBridgeReady ? "true" : "false";
+      checkoutForm.dataset.paymentGatewayProvider = CONFIG.PAYMENT_GATEWAY_PROVIDER || "";
+    }
 
     if (upiBox) {
       upiBox.hidden = !isUpi;
@@ -2183,6 +3433,17 @@ function initMenuAndCart() {
 
     if (upiDiscountAmountEl) {
       upiDiscountAmountEl.textContent = `-${formatCurrency(gpayDiscount)}`;
+    }
+
+    if (upiDiscountLabelEl) {
+      upiDiscountLabelEl.textContent =
+        `Google Pay Discount (${formatDiscountPercent(upiDiscountPercent)})`;
+    }
+
+    if (upiOfferBadgeEl) {
+      upiOfferBadgeEl.textContent = upiDiscountPercent > 0
+        ? `Pay with Google Pay and get ${formatDiscountPercent(upiDiscountPercent)} off`
+        : "Pay with Google Pay / UPI";
     }
 
     if (upiFinalAmountEl) {
@@ -2205,7 +3466,7 @@ function initMenuAndCart() {
     updateOrderPreview();
   }
 
-  function openGooglePay() {
+  async function openGooglePay() {
     const { gpayFinalTotal } = calculatePayableAmounts();
     const upiLink = buildUpiLink(gpayFinalTotal);
 
@@ -2217,13 +3478,22 @@ function initMenuAndCart() {
       upiFallbackBox.hidden = false;
     }
 
+    if (!CONFIG.OWNER_UPI_ID) {
+      showToast("UPI ID is not configured for this hotel.");
+      return;
+    }
+
+    if (!isLikelyMobileUpiDevice()) {
+      await showManualUpiFallback(
+        "Google Pay / UPI app links open on supported mobile devices. Use the details below."
+      );
+      return;
+    }
+
     try {
       window.location.href = upiLink;
     } catch (error) {
-      if (upiFallbackBox) {
-        upiFallbackBox.hidden = false;
-      }
-      showToast(
+      await showManualUpiFallback(
         "Could not open Google Pay automatically. Use the manual UPI link below.",
       );
       return;
@@ -2548,10 +3818,16 @@ function initMenuAndCart() {
 
     if (loadMoreBtn) {
       loadMoreBtn.hidden = shouldUsePreviewMode() || remaining <= 0;
+      const loadMoreLabel = getConfiguredCtaLabel("loadMore") || "Load More";
+      const loadMoreHint = formatConfiguredCountLabel(
+        getConfiguredCtaLabel("loadMoreHint"),
+        remaining,
+        `${remaining} more dishes`
+      );
       loadMoreBtn.innerHTML =
         remaining > 0
-          ? `<span>Load More</span><small>${remaining} more dishes</small>`
-          : `<span>Load More</span>`;
+          ? `<span>${escapeHTML(loadMoreLabel)}</span><small>${escapeHTML(loadMoreHint)}</small>`
+          : `<span>${escapeHTML(loadMoreLabel)}</span>`;
     }
 
     if (scrollHint) {
@@ -2559,10 +3835,16 @@ function initMenuAndCart() {
       scrollHint.hidden = shouldUsePreviewMode() || remaining <= 0;
 
       if (scrollHintLabel) {
-        scrollHintLabel.textContent =
+        const fallbackHint =
           remaining > 0
             ? `Explore ${remaining} more dish${remaining === 1 ? "" : "es"} below`
             : "Explore more dishes below";
+
+        scrollHintLabel.textContent = formatConfiguredCountLabel(
+          getConfiguredCtaLabel("menuScrollHint"),
+          remaining,
+          fallbackHint
+        );
       }
     }
 
@@ -2675,13 +3957,29 @@ function initMenuAndCart() {
   if (floatingCartBtn)
     floatingCartBtn.addEventListener("click", openCartDrawer);
 
+  ensurePaymentGatewayOption();
 
   $$('input[name="paymentMethod"]').forEach((input) => {
     input.addEventListener("change", updatePaymentUI);
   });
 
+  refreshPaymentGatewayReadiness().then(() => {
+    updatePaymentUI();
+  });
+
   if (payWithGpayBtn) {
     payWithGpayBtn.addEventListener("click", openGooglePay);
+  }
+
+  if (upiFallbackLink) {
+    upiFallbackLink.addEventListener("click", (event) => {
+      if (isLikelyMobileUpiDevice()) return;
+
+      event.preventDefault();
+      showManualUpiFallback(
+        "Manual UPI links need a supported mobile UPI app. Use the details below."
+      );
+    });
   }
 
   [
@@ -2756,6 +4054,11 @@ async function handleCheckoutSubmit(e) {
 
   const paymentConfirmed = !!document.getElementById("orderPaymentConfirmed")?.checked;
 
+  if (paymentMethod === "ONLINE_GATEWAY" && !isPaymentGatewayCheckoutReady(paymentMethod)) {
+    showToast("Secure online payment is not live yet. Please use COD or Google Pay / UPI.");
+    return;
+  }
+
   if (!customerName || !customerPhone || !customerAddress) {
     showToast(
       hasDineInOrderContext(orderContext)
@@ -2804,44 +4107,94 @@ async function handleCheckoutSubmit(e) {
   // Show in preview
   if (orderPreview) orderPreview.textContent = summaryText;
 
-  // Prepare payload for backend (optional)
-  const payload = {
-    hotelName,
-    hotelSlug: getActiveHotelSlug(),
-    customerName,
-    customerPhone,
-    customerAddress,
-    locationLink,
-    note,
-    paymentMethod: paymentMethod === "UPI" ? "Google Pay / UPI" : "COD",
-    paymentConfirmed,
-    totals: payableAmounts,
-    whatsappMessage: summaryText,
-    orderContext: hasDineInOrderContext(orderContext)
-      ? {
-          orderType: orderContext.orderType,
-          tableNumber: orderContext.tableNumber,
-          orderSource: orderContext.orderSource
-        }
-      : undefined,
-    items: normalizedCart.map(item => ({
-      id: item.id,
-      name: item.name,
-      qty: item.qty,
-      price: item.price
-    }))
-  };
+  const isAddonOrder = hasActiveOrderAddonContext(orderContext);
+
+  if (isAddonOrder && paymentMethod === "ONLINE_GATEWAY") {
+    showToast("Secure online payment is not available for add-on items yet. Please use COD or Google Pay / UPI.");
+    return;
+  }
+
+  if (paymentMethod === "ONLINE_GATEWAY") {
+    try {
+      await handlePaymentGatewayCheckout({
+        normalizedCart,
+        paymentMethod,
+        customerName,
+        customerPhone,
+        customerAddress,
+        note,
+        summaryText,
+        orderContext
+      });
+    } catch (error) {
+      console.error("Secure payment checkout failed:", error);
+      showToast(error.message || "Secure payment failed. Please use COD or Google Pay / UPI.");
+    }
+    return;
+  }
+
+  const orderItemsPayload = normalizedCart.map(item => ({
+    id: item.id,
+    name: item.name,
+    qty: item.qty,
+    price: item.price
+  }));
+  const paymentMethodLabel = paymentMethod === "UPI" ? "Google Pay / UPI" : "COD";
+  const orderContextPayload = hasDineInOrderContext(orderContext)
+    ? {
+        orderType: orderContext.orderType,
+        tableNumber: orderContext.tableNumber,
+        orderSource: orderContext.orderSource
+      }
+    : undefined;
+  const endpoint = isAddonOrder
+    ? `/api/order-tracking/${encodeURIComponent(getActiveHotelSlug())}/${encodeURIComponent(orderContext.addToOrderId)}/add-items`
+    : "/api/orders";
+  const payload = isAddonOrder
+    ? {
+        token: orderContext.addToken,
+        note,
+        paymentMethod: paymentMethodLabel,
+        paymentConfirmed,
+        items: orderItemsPayload.map((item) => ({
+          id: item.id,
+          qty: item.qty
+        }))
+      }
+    : {
+        hotelName,
+        hotelSlug: getActiveHotelSlug(),
+        customerName,
+        customerPhone,
+        customerAddress,
+        locationLink,
+        note,
+        paymentMethod: paymentMethodLabel,
+        paymentConfirmed,
+        totals: payableAmounts,
+        whatsappMessage: summaryText,
+        orderContext: orderContextPayload,
+        items: orderItemsPayload
+      };
 
   let waLink;
+  let tracking = null;
 
   try {
-    const result = await postJSON("/api/orders", payload);
+    const result = await postJSON(endpoint, payload);
+    const approvedSummaryText =
+      result?.preview || result?.order?.whatsapp_message || summaryText;
     const activeHotelWhatsappLink = cleanPhone(CONFIG.OWNER_WHATSAPP_NUMBER)
-      ? ownerWhatsAppLink(summaryText)
+      ? ownerWhatsAppLink(approvedSummaryText)
       : "";
-    waLink = activeHotelWhatsappLink || result.ownerWhatsappLink || ownerWhatsAppLink(summaryText);
+    waLink = result.ownerWhatsappLink || activeHotelWhatsappLink || ownerWhatsAppLink(approvedSummaryText);
+    tracking = result?.trackingReady ? result.tracking : null;
   } catch (error) {
     console.warn("Backend save failed, using direct WhatsApp fallback", error);
+    if (error?.status >= 400 && error.status < 500) {
+      showToast(error.message || "Order details are invalid. Please refresh and try again.");
+      return;
+    }
     waLink = ownerWhatsAppLink(summaryText);
   }
 
@@ -2862,7 +4215,12 @@ async function handleCheckoutSubmit(e) {
   // Finally open WhatsApp with the summary
   openWhatsAppSafely(waLink);
 
-  showToast("Order sent to WhatsApp successfully!");
+  showOrderTrackingPrompt(tracking);
+  showToast(
+    tracking
+      ? "Order saved. Tracking link is ready."
+      : "Order sent to WhatsApp successfully!"
+  );
 }
 
 function bindCheckoutForm() {
@@ -2882,6 +4240,7 @@ function bindCheckoutForm() {
   updatePaymentUI();
   updateOrderPreview();
   bindCheckoutForm();
+  renderRecentOrderTrackingShortcut();
 }
 
 
@@ -3145,7 +4504,31 @@ async function sendToSheet(data) {
       message: $("#ctMessage", form)?.value.trim(),
     };
 
-    await sendToSheet(data);
+    const sheetResult = await sendToSheet(data);
+    const hotelName = getActiveHotelName();
+    const hotelSlug = getActiveHotelSlug();
+
+    if (hotelName && hotelSlug) {
+      try {
+        await saveContactSubmission({
+          hotelName,
+          hotelSlug,
+          name: data.name,
+          email: data.email,
+          subject: data.subject,
+          message: data.message,
+          googleSheetStatus: sheetResult ? "saved" : "failed",
+          googleSheetResponse:
+            sheetResult && typeof sheetResult === "object" && !Array.isArray(sheetResult)
+              ? sheetResult
+              : {}
+        });
+      } catch (error) {
+        console.warn("Contact DB save failed; Google Sheet flow preserved:", error);
+      }
+    } else {
+      console.warn("Contact DB save skipped: hotel context unavailable.");
+    }
 
     form.style.display = "none";
     success.hidden = false;
@@ -3489,7 +4872,53 @@ function renderFooterSection() {
   if (!hotel) return;
 
   setText("footerBrandName", hotel.hotelName || "");
+  setText("footerCopyrightName", hotel.hotelName || "Hotel");
   setText("footerDescription", hotel.footer?.description || "");
+  renderFooterOpeningHours(hotel.footer?.openingHours);
+}
+
+function normalizeFooterOpeningHourRow(row) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) {
+    return null;
+  }
+
+  const label = String(row.label || row.day || row.name || "").trim();
+  const value = String(row.value || row.hours || row.time || "").trim();
+
+  if (!label || !value) {
+    return null;
+  }
+
+  return { label, value };
+}
+
+function renderFooterOpeningHours(openingHours) {
+  const list = document.getElementById("footerHoursList");
+  if (!list) return;
+
+  if (!list.dataset.fallbackHtml) {
+    list.dataset.fallbackHtml = list.innerHTML;
+  }
+
+  const rows = Array.isArray(openingHours)
+    ? openingHours.map((row) => normalizeFooterOpeningHourRow(row)).filter(Boolean)
+    : [];
+
+  if (!rows.length) {
+    list.innerHTML = list.dataset.fallbackHtml;
+    return;
+  }
+
+  list.innerHTML = rows
+    .map(
+      (row) => `
+        <li>
+          <span>${escapeHTML(row.label)}</span>
+          <span>${escapeHTML(row.value)}</span>
+        </li>
+      `
+    )
+    .join("");
 }
 
 function getEventInquiryPayload(values = {}) {
@@ -3527,6 +4956,10 @@ async function saveReservation(payload) {
   return postJSON("/api/reservations", payload);
 }
 
+async function saveContactSubmission(payload) {
+  return postJSON("/api/contact-submissions", payload);
+}
+
 async function saveTestimonialReview(payload) {
   return postJSON("/api/testimonials", payload);
 }
@@ -3550,7 +4983,11 @@ function getUserLiveLocation() {
 }
 
 function getActiveHotelSlug() {
-  return window.APP_STATE?.activeHotelSlug || "hotel-sai-raj";
+  return (
+    window.APP_STATE?.activeHotelSlug ||
+    window.APP_RUNTIME_CONFIG?.DEFAULT_HOTEL_SLUG ||
+    ""
+  );
 }
 
 function withHotelSlug(path) {
@@ -3638,6 +5075,12 @@ function updateHotelAwareLinks(hotelSlug = getActiveHotelSlug()) {
     });
 }
 
+function markAppReady() {
+  document.body.classList.remove("app-booting");
+  document.body.classList.add("app-ready");
+  document.dispatchEvent(new Event("app:ready"));
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     const queryHotelSlug =
@@ -3659,8 +5102,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     bindEventInquiryForm();
     bindTestimonialReviewForm();
     initMenuAndCart();
+
+    markAppReady();
     console.log("App data loaded successfully", window.APP_STATE);
   } catch (error) {
     console.error("App bootstrap failed:", error);
+    markAppReady();
   }
 });

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track Your Order</title>
+  <meta name="description" content="Track your hotel food order status securely." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,600&family=Jost:wght@200;300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/order-tracking.css" />
+</head>
+<body class="tracking-page app-booting">
+  <div id="loader" class="loader" role="status" aria-label="Loading order tracking">
+    <div class="loader-inner">
+      <div class="loader-logo">
+        <span class="loader-a">O</span><span class="loader-urum">rder</span>
+      </div>
+      <div class="loader-bar-wrap"><div class="loader-bar" id="loaderBar"></div></div>
+      <p class="loader-tagline">Loading your order status...</p>
+    </div>
+  </div>
+
+  <div id="pageShell">
+    <main class="tracking-shell" aria-labelledby="trackingTitle">
+      <section class="tracking-hero">
+        <div class="tracking-hero__glow" aria-hidden="true"></div>
+        <div class="tracking-card tracking-card--hero">
+          <p class="section-eyebrow light">Live Order Tracking</p>
+          <h1 id="trackingTitle" class="tracking-title">Track your food order</h1>
+          <p class="tracking-subtitle" id="trackingSubtitle">
+            We are finding your order details securely.
+          </p>
+
+          <div id="trackingStatusBadge" class="tracking-status-badge" data-status="loading">
+            Loading
+          </div>
+          <p id="trackingStatusDescription" class="tracking-status-detail">
+            The hotel team will update this order as it moves forward.
+          </p>
+
+          <p class="tracking-privacy-note">
+            Keep this tracking link private. Anyone with this link can view this order status.
+          </p>
+
+          <div class="tracking-actions">
+            <button type="button" id="refreshTrackingBtn" class="btn btn-primary">
+              <span>Refresh Status</span>
+              <i class="fas fa-rotate-right" aria-hidden="true"></i>
+            </button>
+            <a id="backToMenuLink" class="btn btn-outline" href="menu.html">
+              <span>Back to Menu</span>
+            </a>
+            <a id="addMoreItemsLink" class="btn btn-primary" href="menu.html" hidden>
+              <span>Add More Items</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="tracking-grid" aria-label="Order tracking details">
+        <article class="tracking-card tracking-panel">
+          <div class="tracking-panel__head">
+            <div>
+              <p class="section-eyebrow">Order</p>
+              <h2>Order details</h2>
+            </div>
+            <span id="trackingOrderId" class="tracking-pill">Order</span>
+          </div>
+
+          <dl class="tracking-facts">
+            <div>
+              <dt>Hotel</dt>
+              <dd id="trackingHotelName">-</dd>
+            </div>
+            <div>
+              <dt>Source</dt>
+              <dd id="trackingOrderSource">-</dd>
+            </div>
+            <div>
+              <dt>Table</dt>
+              <dd id="trackingTableNumber">-</dd>
+            </div>
+            <div>
+              <dt>Placed</dt>
+              <dd id="trackingCreatedAt">-</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="tracking-card tracking-panel">
+          <div class="tracking-panel__head">
+            <div>
+              <p class="section-eyebrow">Progress</p>
+              <h2>Current status</h2>
+            </div>
+          </div>
+          <ol class="tracking-timeline" id="trackingTimeline" aria-label="Order progress">
+            <li data-step="new">Received</li>
+            <li data-step="confirmed">Confirmed</li>
+            <li data-step="preparing">Preparing</li>
+            <li data-step="completed">Completed</li>
+          </ol>
+          <p id="trackingUpdatedHint" class="tracking-hint">Status refreshes automatically.</p>
+        </article>
+      </section>
+
+      <section class="tracking-grid tracking-grid--wide" aria-label="Order items and payment">
+        <article class="tracking-card tracking-panel">
+          <div class="tracking-panel__head">
+            <div>
+              <p class="section-eyebrow">Items</p>
+              <h2>Your order</h2>
+            </div>
+          </div>
+          <div id="trackingItems" class="tracking-items">
+            <p class="tracking-empty">Order items will appear here.</p>
+          </div>
+          <section id="trackingAddons" class="tracking-addons" hidden aria-label="Additional table orders">
+            <div class="tracking-addons__head">
+              <p class="section-eyebrow">Add-ons</p>
+              <h3>More items added later</h3>
+            </div>
+            <div id="trackingAddonsList" class="tracking-addons__list"></div>
+          </section>
+        </article>
+
+        <article class="tracking-card tracking-panel">
+          <div class="tracking-panel__head">
+            <div>
+              <p class="section-eyebrow">Payment</p>
+              <h2>Bill summary</h2>
+            </div>
+          </div>
+          <dl class="tracking-totals">
+            <div>
+              <dt>Subtotal</dt>
+              <dd id="trackingSubtotal">Rs. 0.00</dd>
+            </div>
+            <div>
+              <dt>GST</dt>
+              <dd id="trackingGst">Rs. 0.00</dd>
+            </div>
+            <div class="tracking-total-main">
+              <dt>Total</dt>
+              <dd id="trackingTotal">Rs. 0.00</dd>
+            </div>
+            <div id="trackingCombinedTotalRow" class="tracking-combined-total" hidden>
+              <dt>Table Total</dt>
+              <dd id="trackingCombinedTotal">Rs. 0.00</dd>
+            </div>
+            <div>
+              <dt>Payment</dt>
+              <dd id="trackingPaymentStatus">-</dd>
+            </div>
+            <div id="trackingCombinedPaymentRow" class="tracking-combined-state" hidden>
+              <dt>Table Payment</dt>
+              <dd id="trackingCombinedPaymentStatus">-</dd>
+            </div>
+            <div>
+              <dt>Billing</dt>
+              <dd id="trackingBillingStatus">-</dd>
+            </div>
+            <div id="trackingCombinedBillingRow" class="tracking-combined-state" hidden>
+              <dt>Table Billing</dt>
+              <dd id="trackingCombinedBillingStatus">-</dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+
+      <section id="trackingTableActions" class="tracking-card tracking-table-actions" hidden aria-label="Table assistance">
+        <div>
+          <p class="section-eyebrow">Table Support</p>
+          <h2>Need anything at your table?</h2>
+          <p>
+            These actions use the same hotel WhatsApp flow, so staff can receive your table and order details quickly.
+          </p>
+        </div>
+        <div class="tracking-table-actions__buttons">
+          <a id="requestBillLink" class="btn btn-primary" href="#" target="_blank" rel="noopener noreferrer" data-tracking-support-action="bill">
+            <span>Request Bill</span>
+          </a>
+          <a id="callStaffLink" class="btn btn-outline" href="#" target="_blank" rel="noopener noreferrer" data-tracking-support-action="help">
+            <span>Call Staff</span>
+          </a>
+          <p id="trackingTableActionStatus" class="tracking-table-actions__status" hidden aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section id="trackingMessage" class="tracking-card tracking-message" hidden aria-live="polite"></section>
+    </main>
+  </div>
+
+  <script src="js/app-config.js"></script>
+  <script src="js/order-tracking.js"></script>
+</body>
+</html>

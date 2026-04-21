@@ -65,6 +65,21 @@ body {
   overflow-x: hidden;
   cursor: none;
 }
+
+body.app-booting {
+  overflow: hidden;
+}
+
+body.app-booting #pageShell {
+  opacity: 0;
+  visibility: hidden;
+}
+
+body.app-ready #pageShell {
+  opacity: 1;
+  visibility: visible;
+}
+
 img {
   display: block;
   width: 100%;
@@ -2256,6 +2271,55 @@ address {
   line-height: 1.5;
 }
 
+.table-cart-resume-notice {
+  width: min(760px, 100%);
+  margin: 0 auto 24px;
+  padding: 16px 18px;
+  border: 1px solid rgba(160, 120, 48, 0.18);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(212, 175, 55, 0.18), rgba(255, 255, 255, 0.92));
+  box-shadow: 0 18px 42px rgba(49, 35, 16, 0.1);
+  color: #211a10;
+}
+
+.table-cart-resume-notice .order-context-kicker {
+  color: rgba(95, 74, 31, 0.62);
+}
+
+.table-cart-resume-notice strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--gold-dark);
+  font-size: 1.04rem;
+}
+
+.table-cart-resume-notice small {
+  display: block;
+  color: rgba(33, 26, 16, 0.68);
+  line-height: 1.5;
+}
+
+.menu-page .table-cart-resume-notice {
+  border-color: rgba(212, 175, 55, 0.24);
+  background:
+    linear-gradient(135deg, rgba(212, 175, 55, 0.18), rgba(255, 255, 255, 0.06));
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
+  color: #fff;
+}
+
+.menu-page .table-cart-resume-notice .order-context-kicker {
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.menu-page .table-cart-resume-notice strong {
+  color: var(--gold);
+}
+
+.menu-page .table-cart-resume-notice small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
 .payment-box {
   margin: 18px 0;
   padding: 16px;
@@ -3824,6 +3888,62 @@ address {
   flex-shrink: 0;
 }
 
+.payment-gateway-option[hidden],
+.payment-gateway-box[hidden] {
+  display: none !important;
+}
+
+.payment-gateway-option.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.payment-gateway-option.is-disabled input,
+.payment-gateway-option.is-disabled span {
+  pointer-events: none;
+}
+
+.payment-gateway-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.payment-gateway-copy strong {
+  color: #fff;
+  font-size: 0.98rem;
+}
+
+.payment-gateway-copy small {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.payment-gateway-box {
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(201, 168, 76, 0.24);
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(201, 168, 76, 0.11), rgba(255, 255, 255, 0.04)),
+    rgba(0, 0, 0, 0.16);
+}
+
+.payment-gateway-status {
+  margin: 0 0 6px;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.payment-gateway-note {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
 .upi-box {
   margin-top: 14px;
   padding: 0;
@@ -4130,4 +4250,180 @@ address {
   box-shadow:
     0 12px 24px rgba(0, 0, 0, 0.16),
     inset 0 0 0 1px rgba(232, 208, 138, 0.08);
+}
+
+/* Customer order tracking prompt */
+.order-tracking-prompt {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 9997;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: min(520px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid rgba(201, 168, 76, 0.32);
+  border-radius: 22px;
+  background: rgba(255, 252, 245, 0.96);
+  box-shadow: 0 24px 70px rgba(20, 18, 15, 0.18);
+  transform: translateY(24px);
+  opacity: 0;
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.order-tracking-prompt.is-visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.order-tracking-prompt__content {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.order-tracking-prompt__kicker {
+  color: var(--gold-dark);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.order-tracking-prompt__content strong {
+  color: var(--charcoal);
+  font-family: var(--font-body);
+  font-size: 0.96rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.order-tracking-prompt__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.order-tracking-prompt__actions .btn {
+  min-height: 42px;
+  padding: 0 18px;
+  font-size: 0.7rem;
+}
+
+.order-tracking-prompt__close {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(30, 26, 22, 0.08);
+  color: var(--charcoal);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.order-tracking-prompt__close:hover {
+  background: rgba(30, 26, 22, 0.14);
+}
+
+.recent-order-tracking-shortcut {
+  position: fixed;
+  left: 22px;
+  bottom: 22px;
+  z-index: 9995;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(201, 168, 76, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 252, 245, 0.94);
+  box-shadow: 0 20px 55px rgba(20, 18, 15, 0.16);
+  backdrop-filter: blur(18px);
+}
+
+.recent-order-tracking-shortcut__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--charcoal);
+  text-decoration: none;
+}
+
+.recent-order-tracking-shortcut__icon {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--charcoal);
+  color: var(--gold);
+}
+
+.recent-order-tracking-shortcut small,
+.recent-order-tracking-shortcut strong {
+  display: block;
+  line-height: 1.1;
+}
+
+.recent-order-tracking-shortcut small {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.recent-order-tracking-shortcut strong {
+  margin-top: 3px;
+  font-size: 0.88rem;
+}
+
+.recent-order-tracking-shortcut__close {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(30, 26, 22, 0.08);
+  color: var(--charcoal);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.recent-order-tracking-shortcut__close:hover {
+  background: rgba(30, 26, 22, 0.14);
+}
+
+@media (max-width: 560px) {
+  .order-tracking-prompt {
+    right: 14px;
+    bottom: 14px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .order-tracking-prompt__actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .order-tracking-prompt__actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .recent-order-tracking-shortcut {
+    left: 14px;
+    right: 14px;
+    bottom: 86px;
+    justify-content: space-between;
+    border-radius: 18px;
+  }
 }

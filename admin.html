@@ -157,6 +157,7 @@ body {
     #menuFormSection .admin-field-label,
     #galleryFormSection .admin-field-label,
     #notificationSettingsSection .admin-field-label,
+    #paymentRouteSettingsSection .admin-field-label,
     #uploadSection .admin-field-label,
     #qrTableLinkSection .admin-field-label,
     #profileFormSection .admin-field-label {
@@ -399,6 +400,14 @@ body {
       line-height: 1.5;
     }
 
+    .admin-attention-row {
+      padding: 8px 10px;
+      border: 1px solid rgba(232, 184, 103, 0.35);
+      border-radius: 8px;
+      background: rgba(232, 184, 103, 0.14);
+      color: #ffe2a8;
+    }
+
     .status-row {
       display: flex;
       flex-wrap: wrap;
@@ -586,7 +595,8 @@ body {
     #hotelFormSection label.admin-checkbox,
     #menuFormSection label.admin-checkbox,
     #galleryFormSection label.admin-checkbox,
-    #notificationSettingsSection label.admin-checkbox {
+    #notificationSettingsSection label.admin-checkbox,
+    #paymentRouteSettingsSection label.admin-checkbox {
       display: flex;
       gap: 8px;
       align-items: center;
@@ -601,6 +611,8 @@ body {
       cursor: pointer;
     }
 
+    #paymentRouteSettingsSection input:not([type="hidden"]),
+    #paymentRouteSettingsSection select,
     #qrTableLinkSection input:not([type="hidden"]),
     #qrTableLinkSection select {
       width: 100%;
@@ -612,6 +624,8 @@ body {
       border-radius: 8px;
     }
 
+    #paymentRouteSettingsSection input:focus,
+    #paymentRouteSettingsSection select:focus,
     #qrTableLinkSection input:focus,
     #qrTableLinkSection select:focus {
       outline: none;
@@ -655,6 +669,7 @@ body {
             <button class="admin-tab active" data-tab="orders">Orders</button>
             <button class="admin-tab" data-tab="reservations">Reservations</button>
             <button class="admin-tab" data-tab="inquiries">Inquiries</button>
+            <button class="admin-tab" data-tab="contact-submissions">Contact Messages</button>
             <button class="admin-tab" data-tab="notification-events">Notifications</button>
             <button class="admin-tab" data-tab="hotels">Hotels</button>
             <button class="admin-tab" data-tab="menu-items">Menu Items</button>
@@ -671,6 +686,7 @@ body {
             <button type="button" id="openGalleryFormBtn" class="admin-tab">Gallery Form</button>
             <button type="button" id="openTestimonialFormBtn" class="admin-tab">Testimonials Form</button>
             <button type="button" id="openNotificationSettingsBtn" class="admin-tab">Notification Settings</button>
+            <button type="button" id="openPaymentRouteSettingsBtn" class="admin-tab">Payment Route Settings</button>
             <button type="button" id="openProfileFormBtn" class="admin-tab">Profile Form</button>
             <button type="button" id="openQrTableLinkBtn" class="admin-tab">QR Table Link</button>
             <button id="openUploadSectionBtn" class="admin-tab">Upload Image</button>
@@ -713,7 +729,7 @@ body {
       <form id="qrTableLinkForm" class="admin-grid">
         <div class="admin-field">
           <label class="admin-field-label" for="qrLinkHotelSlugInput">Hotel Slug (Required)</label>
-          <input id="qrLinkHotelSlugInput" placeholder="hotel-sai-raj" maxlength="120" required />
+          <input id="qrLinkHotelSlugInput" placeholder="hotel-example" maxlength="120" required />
           <p class="admin-field-hint">This usually auto-fills from the selected hotel scope.</p>
         </div>
 
@@ -755,13 +771,13 @@ body {
 
         <div class="admin-field">
           <label class="admin-field-label" for="hotelSlugInput">Hotel Slug (Required)</label>
-          <input id="hotelSlugInput" name="slug" placeholder="hotel-sai-raj" required />
+          <input id="hotelSlugInput" name="slug" placeholder="hotel-example" required />
           <p class="admin-field-hint">Use the same stable slug across hotel profile, menu, gallery, uploads, and domain-aware routing.</p>
         </div>
 
         <div class="admin-field">
           <label class="admin-field-label" for="hotelNameInput">Hotel Name (Required)</label>
-          <input id="hotelNameInput" name="hotelName" placeholder="Hotel Sai Raj" required />
+          <input id="hotelNameInput" name="hotelName" placeholder="Hotel Example" required />
         </div>
 
         <div class="admin-field">
@@ -808,7 +824,7 @@ body {
 
         <div class="admin-field">
           <label class="admin-field-label" for="menuHotelSlugInput">Hotel Slug (Required)</label>
-          <input id="menuHotelSlugInput" name="hotelSlug" placeholder="hotel-sai-raj" required />
+          <input id="menuHotelSlugInput" name="hotelSlug" placeholder="hotel-example" required />
           <p class="admin-field-hint">This usually auto-fills from the selected hotel scope unless you are editing an existing item.</p>
         </div>
 
@@ -882,7 +898,7 @@ body {
 
         <div class="admin-field">
           <label class="admin-field-label" for="galleryHotelSlugInput">Hotel Slug (Required)</label>
-          <input id="galleryHotelSlugInput" name="hotelSlug" placeholder="hotel-sai-raj" required />
+          <input id="galleryHotelSlugInput" name="hotelSlug" placeholder="hotel-example" required />
           <p class="admin-field-hint">This usually auto-fills from the selected hotel scope unless you are editing an existing gallery item.</p>
         </div>
 
@@ -894,7 +910,7 @@ body {
 
         <div class="admin-field">
           <label class="admin-field-label" for="galleryStoragePathInput">Storage Path</label>
-          <input id="galleryStoragePathInput" name="storagePath" placeholder="hotel-sai-raj/gallery/file.jpg" />
+          <input id="galleryStoragePathInput" name="storagePath" placeholder="hotel-example/gallery/file.jpg" />
           <p class="admin-field-hint">Optional for manual URLs. Upload helper will fill this automatically when the image comes from storage.</p>
         </div>
 
@@ -939,7 +955,7 @@ body {
       <form id="notificationSettingsForm" class="admin-grid">
         <div class="admin-field">
           <label class="admin-field-label" for="notificationSettingsHotelSlugInput">Hotel Slug (Required)</label>
-          <input id="notificationSettingsHotelSlugInput" placeholder="hotel-sai-raj" required />
+          <input id="notificationSettingsHotelSlugInput" placeholder="hotel-example" required />
           <p class="admin-field-hint">This usually auto-fills from the selected hotel scope when one hotel is selected.</p>
         </div>
 
@@ -973,6 +989,43 @@ body {
       </form>
     </section>
 
+    <section id="paymentRouteSettingsSection" class="admin-card" style="display:none; margin-top: 20px;">
+      <h2>Per-Hotel Razorpay Route Settings</h2>
+      <p class="admin-sub">Private setup for future hotel-owned Razorpay Route transfers.</p>
+      <p class="admin-form-help">This only saves the hotel linked account mapping. It does not change the current checkout or settlement behavior until Route checkout is enabled in a later step.</p>
+
+      <form id="paymentRouteSettingsForm" class="admin-grid">
+        <div class="admin-field">
+          <label class="admin-field-label" for="paymentRouteHotelSlugInput">Hotel Slug (Required)</label>
+          <input id="paymentRouteHotelSlugInput" placeholder="hotel-example" required />
+          <p class="admin-field-hint">This usually auto-fills from the selected hotel scope.</p>
+        </div>
+
+        <div class="admin-field">
+          <label class="admin-field-label" for="paymentRouteProviderInput">Gateway Provider</label>
+          <select id="paymentRouteProviderInput" class="admin-select">
+            <option value="razorpay">Razorpay</option>
+          </select>
+          <p class="admin-field-hint">Only Razorpay is supported in the current gateway bridge.</p>
+        </div>
+
+        <div class="admin-field">
+          <label class="admin-field-label" for="paymentRouteLinkedAccountInput">Razorpay Linked Account ID</label>
+          <input id="paymentRouteLinkedAccountInput" placeholder="acc_xxxxxxxxx" maxlength="120" />
+          <p class="admin-field-hint">Create this linked account in Razorpay Route first, then paste its account id here.</p>
+        </div>
+
+        <label class="admin-checkbox">
+          <input id="paymentRouteEnabledInput" type="checkbox" />
+          Enable Route For This Hotel Later
+        </label>
+        <p class="admin-field-hint">Safe staging flag only. Current payment creation does not read this yet.</p>
+
+        <button type="submit" class="status-btn">Save Payment Route Settings</button>
+        <p id="paymentRouteSettingsHelp" class="admin-field-hint">Route settings are not loaded yet.</p>
+      </form>
+    </section>
+
     <section id="testimonialFormSection" class="admin-card" style="display:none; margin-top: 20px;">
       <h2>Create / Update Testimonial</h2>
       <p class="admin-form-help">Use this form to create or update one hotel-specific testimonial record. Public display still depends on the testimonial visibility and moderation state.</p>
@@ -981,7 +1034,7 @@ body {
 
         <div class="admin-field">
           <label class="admin-field-label" for="testimonialHotelSlugInput">Hotel Slug (Required)</label>
-          <input id="testimonialHotelSlugInput" name="hotelSlug" placeholder="hotel-sai-raj" required />
+          <input id="testimonialHotelSlugInput" name="hotelSlug" placeholder="hotel-example" required />
           <p class="admin-field-hint">This usually auto-fills from the selected hotel scope unless you are editing an existing testimonial.</p>
         </div>
 
@@ -1036,12 +1089,12 @@ body {
   <form id="profileForm" class="admin-grid">
     <div class="admin-field">
       <label class="admin-field-label" for="profileHotelSlugInput">Hotel Slug (Required)</label>
-      <input id="profileHotelSlugInput" placeholder="hotel-sai-raj" />
+      <input id="profileHotelSlugInput" placeholder="hotel-example" />
       <p class="admin-field-hint">This should match the hotel record slug so profile content loads for the correct tenant.</p>
     </div>
     <div class="admin-field">
       <label class="admin-field-label" for="profileHotelNameInput">Hotel Name (Required)</label>
-      <input id="profileHotelNameInput" placeholder="Hotel Sai Raj" />
+      <input id="profileHotelNameInput" placeholder="Hotel Example" />
     </div>
     <div class="admin-field">
       <label class="admin-field-label" for="profileTaglineInput">Tagline</label>
@@ -1060,6 +1113,12 @@ body {
       <input id="profileGstInput" type="number" placeholder="5" />
     </div>
 
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileUpiDiscountPercentInput">Google Pay / UPI Discount Percentage</label>
+      <input id="profileUpiDiscountPercentInput" type="number" min="0" max="100" step="0.01" placeholder="10" />
+      <p class="admin-field-hint">Set 0 for no manual UPI discount. Leaving blank keeps the current default behavior.</p>
+    </div>
+
     <h3>Branding</h3>
     <div class="admin-field">
       <label class="admin-field-label" for="profileBrandPrimaryInput">Logo Primary Text</label>
@@ -1076,6 +1135,174 @@ body {
       <span class="admin-meta">Preview updates live as you type.</span>
       <button id="profileThemeResetBtn" type="button" class="admin-tab">Reset Theme Fields</button>
     </div>
+
+    <h4>Navigation & Menu Labels</h4>
+    <p class="admin-sub">Optional hotel-specific labels. Leave any field blank to keep the current built-in public text.</p>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileNavLabelAboutInput">Navbar About Label</label>
+      <input id="profileNavLabelAboutInput" maxlength="80" placeholder="About" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileNavLabelMenuInput">Navbar Menu Label</label>
+      <input id="profileNavLabelMenuInput" maxlength="80" placeholder="Menu" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileNavLabelGalleryInput">Navbar Gallery Label</label>
+      <input id="profileNavLabelGalleryInput" maxlength="80" placeholder="Gallery" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileNavLabelEventsInput">Navbar Events Label</label>
+      <input id="profileNavLabelEventsInput" maxlength="80" placeholder="Events" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileNavLabelTestimonialsInput">Navbar Reviews Label</label>
+      <input id="profileNavLabelTestimonialsInput" maxlength="80" placeholder="Reviews" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileNavLabelContactInput">Navbar Contact Label</label>
+      <input id="profileNavLabelContactInput" maxlength="80" placeholder="Contact" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileNavLabelReservationInput">Navbar Reservation CTA Label</label>
+      <input id="profileNavLabelReservationInput" maxlength="80" placeholder="Reserve a Table" />
+    </div>
+
+    <h4>Homepage Menu Copy</h4>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileMenuSectionEyebrowInput">Menu Eyebrow</label>
+      <input id="profileMenuSectionEyebrowInput" maxlength="320" placeholder="Signature Flavors" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileMenuSectionTitleInput">Menu Title</label>
+      <input id="profileMenuSectionTitleInput" maxlength="320" placeholder="Our Curated Menu" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileMenuSectionSubtitleInput">Menu Subtitle</label>
+      <input id="profileMenuSectionSubtitleInput" maxlength="320" placeholder="Discover handcrafted starters, mains, desserts, and beverages prepared for every craving." />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileMenuViewFullLabelInput">View Full Menu Button Label</label>
+      <input id="profileMenuViewFullLabelInput" maxlength="320" placeholder="View Full Menu" />
+    </div>
+
+    <h4>Public CTA Labels</h4>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileCtaHeroPrimaryInput">Hero Primary Button Label</label>
+      <input id="profileCtaHeroPrimaryInput" maxlength="160" placeholder="Explore Menu" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileCtaHeroReservationInput">Hero Reservation Button Label</label>
+      <input id="profileCtaHeroReservationInput" maxlength="160" placeholder="Book a Table" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileCtaAboutReservationInput">About Reservation Button Label</label>
+      <input id="profileCtaAboutReservationInput" maxlength="160" placeholder="Reserve Your Table" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileCtaCartButtonInput">Cart Button Label</label>
+      <input id="profileCtaCartButtonInput" maxlength="160" placeholder="View Cart" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileCtaMenuScrollHintInput">Menu Scroll Hint Text</label>
+      <input id="profileCtaMenuScrollHintInput" maxlength="160" placeholder="Explore {count} more dishes below" />
+      <p class="admin-field-hint">Optional. Use <code>{count}</code> if you want the remaining dish count inside the text.</p>
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileCtaLoadMoreInput">Load More Button Label</label>
+      <input id="profileCtaLoadMoreInput" maxlength="160" placeholder="Load More" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileCtaLoadMoreHintInput">Load More Count Text</label>
+      <input id="profileCtaLoadMoreHintInput" maxlength="160" placeholder="{count} more dishes" />
+      <p class="admin-field-hint">Optional. Use <code>{count}</code> to show the remaining dish count.</p>
+    </div>
+
+    <h4>Full Menu Page Copy</h4>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFullMenuSectionEyebrowInput">Full Menu Eyebrow</label>
+      <input id="profileFullMenuSectionEyebrowInput" maxlength="320" placeholder="Complete Selection" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFullMenuSectionTitleInput">Full Menu Title</label>
+      <input id="profileFullMenuSectionTitleInput" maxlength="320" placeholder="Browse the Full Menu" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFullMenuSectionSubtitleInput">Full Menu Subtitle</label>
+      <input id="profileFullMenuSectionSubtitleInput" maxlength="320" placeholder="Search across categories, sort dishes, filter tags, and place your order on WhatsApp." />
+    </div>
+
+    <h4>Menu Category Labels</h4>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileMenuCategoryStartersInput">Starters Category Label</label>
+      <input id="profileMenuCategoryStartersInput" maxlength="80" placeholder="Starters" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileMenuCategoryMainsInput">Main Course Category Label</label>
+      <input id="profileMenuCategoryMainsInput" maxlength="80" placeholder="Main Course" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileMenuCategoryDessertsInput">Desserts Category Label</label>
+      <input id="profileMenuCategoryDessertsInput" maxlength="80" placeholder="Desserts" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileMenuCategoryDrinksInput">Beverages Category Label</label>
+      <input id="profileMenuCategoryDrinksInput" maxlength="80" placeholder="Beverages" />
+    </div>
+
+    <h4>Footer Labels</h4>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelExploreHeadingInput">Footer Explore Heading</label>
+      <input id="profileFooterLabelExploreHeadingInput" maxlength="160" placeholder="Explore" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelAboutInput">Footer About Link Label</label>
+      <input id="profileFooterLabelAboutInput" maxlength="160" placeholder="About Us" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelMenuInput">Footer Menu Link Label</label>
+      <input id="profileFooterLabelMenuInput" maxlength="160" placeholder="Our Menu" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelGalleryInput">Footer Gallery Link Label</label>
+      <input id="profileFooterLabelGalleryInput" maxlength="160" placeholder="Gallery" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelEventsInput">Footer Events Link Label</label>
+      <input id="profileFooterLabelEventsInput" maxlength="160" placeholder="Private Events" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelReviewsInput">Footer Reviews Link Label</label>
+      <input id="profileFooterLabelReviewsInput" maxlength="160" placeholder="Reviews" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelReservationsHeadingInput">Footer Reservations Heading</label>
+      <input id="profileFooterLabelReservationsHeadingInput" maxlength="160" placeholder="Reservations" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelBookTableInput">Footer Book Table Link Label</label>
+      <input id="profileFooterLabelBookTableInput" maxlength="160" placeholder="Book a Table" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelPrivateDiningInput">Footer Private Dining Link Label</label>
+      <input id="profileFooterLabelPrivateDiningInput" maxlength="160" placeholder="Private Dining" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelContactInput">Footer Contact Link Label</label>
+      <input id="profileFooterLabelContactInput" maxlength="160" placeholder="Contact Us" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelOpeningHoursHeadingInput">Footer Opening Hours Heading</label>
+      <input id="profileFooterLabelOpeningHoursHeadingInput" maxlength="160" placeholder="Opening Hours" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelFindUsHeadingInput">Footer Find Us Heading</label>
+      <input id="profileFooterLabelFindUsHeadingInput" maxlength="160" placeholder="Find Us" />
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterLabelCopyrightSuffixInput">Footer Copyright Suffix</label>
+      <input id="profileFooterLabelCopyrightSuffixInput" maxlength="160" placeholder="All rights reserved." />
+    </div>
+
     <input id="profileThemePrimaryInput" placeholder="Primary Accent Color (e.g. #c9a84c)" />
     <input id="profileThemePrimaryLightInput" placeholder="Primary Light Color (e.g. #e8d08a)" />
     <input id="profileThemePrimaryDarkInput" placeholder="Primary Dark Color (e.g. #a07830)" />
@@ -1337,6 +1564,11 @@ body {
 
     <h3>Footer</h3>
     <textarea id="profileFooterDescriptionInput" rows="4" placeholder="Footer Description"></textarea>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileFooterOpeningHoursInput">Footer Opening Hours JSON</label>
+      <textarea id="profileFooterOpeningHoursInput" rows="6" placeholder='[{"label":"Mon","value":"Closed"},{"label":"Tue-Fri","value":"6PM-11PM"}]'></textarea>
+      <p class="admin-field-hint">Optional. Leave blank or [] to keep the current built-in footer hours fallback.</p>
+    </div>
 
     <h3>Social</h3>
     <input id="profileInstagramInput" placeholder="Instagram URL" />
@@ -1354,7 +1586,7 @@ body {
   <form id="uploadForm" class="admin-grid">
     <div class="admin-field">
       <label class="admin-field-label" for="uploadHotelSlugInput">Hotel Slug</label>
-      <input id="uploadHotelSlugInput" placeholder="hotel-sai-raj" />
+      <input id="uploadHotelSlugInput" placeholder="hotel-example" />
       <p class="admin-field-hint">Leave this as the selected hotel when uploading an asset for one hotel. Use shared only when the file is not hotel-specific.</p>
     </div>
 
@@ -1378,7 +1610,7 @@ body {
 
     <div class="admin-field">
       <label class="admin-field-label" for="uploadFileInput">Choose Image File</label>
-      <input id="uploadFileInput" type="file" accept="image/*" />
+      <input id="uploadFileInput" type="file" accept="image/jpeg,image/png,image/webp,image/avif" />
     </div>
 
     <button type="submit" class="status-btn">Upload Image</button>
@@ -1391,7 +1623,7 @@ body {
     <p class="admin-form-help">This removes the file from storage by exact path. Use carefully.</p>
     <div class="admin-field">
       <label class="admin-field-label" for="deleteStoragePathInput">Storage Path</label>
-      <input id="deleteStoragePathInput" placeholder="hotel-sai-raj/menu/123-file.jpg" />
+      <input id="deleteStoragePathInput" placeholder="hotel-example/menu/123-file.jpg" />
       <p class="admin-field-hint">Paste the exact stored file path returned after upload.</p>
     </div>
     <button id="deleteUploadedFileBtn" class="status-btn" type="button">Delete Uploaded File</button>

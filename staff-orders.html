@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Staff Orders</title>
+<style>
+:root {
+--staff-bg: #f7efe4;
+--staff-bg-deep: #eadbc7;
+--staff-panel: rgba(255, 250, 244, 0.78);
+--staff-panel-soft: rgba(246, 236, 224, 0.92);
+--staff-panel-strong: #fff8f1;
+--staff-border: rgba(122, 80, 46, 0.16);
+--staff-border-strong: rgba(133, 86, 49, 0.24);
+--staff-gold: #c9984f;
+--staff-gold-deep: #9f6e31;
+--staff-terracotta: #c97452;
+--staff-terracotta-deep: #a9563a;
+--staff-sage: #7d8f63;
+--staff-olive: #667648;
+--staff-maroon: #8b4358;
+--staff-plum: #6f4a63;
+--staff-peach: #f4d0b6;
+--staff-rose-beige: #e7c7b7;
+--staff-brown: #6a4a36;
+--staff-text: #3f2b20;
+--staff-text-strong: #2a1a12;
+--staff-muted: #7b6556;
+--staff-muted-soft: #947f71;
+--staff-danger: #b55b58;
+--staff-danger-soft: #f6dfdb;
+--staff-success: #5f8052;
+--staff-success-soft: #e4efe0;
+--staff-warning: #a97324;
+--staff-warning-soft: #f7ead0;
+--staff-shadow-soft: 0 18px 40px rgba(115, 77, 46, 0.10);
+--staff-shadow-mid: 0 26px 60px rgba(115, 77, 46, 0.14);
+--staff-shadow-strong: 0 34px 90px rgba(98, 63, 36, 0.18);
+--staff-glow: 0 0 0 4px rgba(201, 152, 79, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+  }
+
+html {
+color-scheme: light;
+}
+
+body {
+margin: 0;
+min-height: 100vh;
+font-family: Arial, sans-serif;
+color: var(--staff-text);
+background:
+radial-gradient(circle at 0% 0%, rgba(233, 193, 141, 0.34), transparent 28rem),
+radial-gradient(circle at 100% 0%, rgba(139, 67, 88, 0.16), transparent 24rem),
+radial-gradient(circle at 100% 100%, rgba(125, 143, 99, 0.16), transparent 28rem),
+linear-gradient(135deg, #fcf7f0 0%, #f5ebde 48%, #efe0cd 100%);
+background-attachment: fixed;
+}
+
+body::before,
+body::after {
+content: "";
+position: fixed;
+inset: 0;
+pointer-events: none;
+z-index: 0;
+}
+
+body::before {
+background:
+radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.78), transparent 18rem),
+radial-gradient(circle at 82% 20%, rgba(255, 223, 193, 0.36), transparent 16rem),
+radial-gradient(circle at 50% 100%, rgba(201, 116, 82, 0.10), transparent 24rem);
+}
+
+body::after {
+background:
+linear-gradient(90deg, rgba(255, 255, 255, 0.14) 1px, transparent 1px),
+linear-gradient(180deg, rgba(255, 255, 255, 0.10) 1px, transparent 1px);
+background-size: 56px 56px;
+opacity: 0.24;
+mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent 82%);
+}
+
+.staff-wrap {
+position: relative;
+z-index: 1;
+width: min(1120px, calc(100% - 32px));
+margin: 0 auto;
+padding: 36px 0 42px;
+}
+
+.staff-header {
+display: flex;
+justify-content: space-between;
+gap: 16px;
+align-items: flex-start;
+margin-bottom: 26px;
+}
+
+.staff-kicker {
+margin: 0 0 10px;
+color: var(--staff-terracotta-deep);
+font-size: 11px;
+font-weight: 800;
+letter-spacing: 0.18em;
+text-transform: uppercase;
+}
+
+.staff-title {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: clamp(30px, 4vw, 46px);
+line-height: 1.02;
+letter-spacing: -0.03em;
+text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.staff-sub {
+margin: 12px 0 0;
+max-width: 720px;
+color: var(--staff-muted);
+line-height: 1.72;
+font-size: 14px;
+}
+
+.staff-card {
+position: relative;
+display: grid;
+gap: 16px;
+padding: 24px;
+border: 1px solid var(--staff-border);
+border-radius: 26px;
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 248, 241, 0.82)),
+rgba(255, 250, 244, 0.78);
+backdrop-filter: blur(18px);
+-webkit-backdrop-filter: blur(18px);
+box-shadow: var(--staff-shadow-mid);
+overflow: hidden;
+}
+
+.staff-card::before {
+content: "";
+position: absolute;
+inset: 0;
+pointer-events: none;
+background:
+linear-gradient(135deg, rgba(255, 255, 255, 0.50), transparent 36%),
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.12), transparent 16rem);
+}
+
+.staff-card > * {
+position: relative;
+z-index: 1;
+}
+
+.staff-grid {
+display: grid;
+grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+gap: 18px;
+align-items: start;
+}
+
+.staff-form {
+display: grid;
+gap: 16px;
+}
+
+.staff-field {
+display: grid;
+gap: 8px;
+}
+
+.staff-label {
+color: var(--staff-text-strong);
+font-size: 13px;
+font-weight: 800;
+letter-spacing: 0.02em;
+}
+
+.staff-input,
+.staff-select {
+width: 100%;
+min-height: 48px;
+border: 1px solid rgba(131, 91, 55, 0.20);
+border-radius: 16px;
+padding: 12px 14px;
+color: var(--staff-text-strong);
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(248, 240, 231, 0.94));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.85),
+0 8px 18px rgba(122, 80, 46, 0.06);
+transition:
+border-color 180ms ease,
+box-shadow 180ms ease,
+transform 180ms ease,
+background 180ms ease;
+}
+
+.staff-input::placeholder,
+.staff-select::placeholder {
+color: var(--staff-muted-soft);
+}
+
+.staff-input:hover,
+.staff-select:hover {
+border-color: rgba(159, 110, 49, 0.34);
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 244, 237, 0.98));
+}
+
+.staff-input:focus,
+.staff-select:focus {
+outline: none;
+border-color: var(--staff-gold);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.92),
+0 12px 26px rgba(201, 152, 79, 0.12),
+var(--staff-glow);
+transform: translateY(-1px);
+}
+
+.staff-select {
+appearance: none;
+-webkit-appearance: none;
+background-image:
+linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(248, 240, 231, 0.94)),
+url("data:image/svg+xml,%3Csvg xmlns='[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7.5L10 12.5L15 7.5' stroke='%23835537' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+background-repeat: no-repeat, no-repeat;
+background-position: 0 0, calc(100% - 14px) 50%;
+background-size: auto, 18px;
+padding-right: 42px;
+}
+
+.staff-hint,
+.staff-status {
+margin: 0;
+color: var(--staff-muted);
+font-size: 13px;
+line-height: 1.62;
+}
+
+.staff-status {
+padding: 12px 14px;
+border-radius: 16px;
+background: rgba(255, 248, 241, 0.72);
+border: 1px solid rgba(133, 86, 49, 0.10);
+}
+
+.staff-status.is-error {
+color: var(--staff-danger);
+background: var(--staff-danger-soft);
+border-color: rgba(181, 91, 88, 0.22);
+}
+
+.staff-actions {
+display: flex;
+flex-wrap: wrap;
+gap: 10px;
+align-items: center;
+}
+
+.staff-orders-search {
+flex: 1 1 260px;
+min-width: min(100%, 260px);
+}
+
+.staff-btn {
+position: relative;
+border: 0;
+border-radius: 999px;
+padding: 12px 18px;
+color: #fffaf4;
+background:
+linear-gradient(135deg, #d59a59 0%, #bf744c 52%, #96505f 100%);
+font-weight: 800;
+letter-spacing: 0.01em;
+cursor: pointer;
+box-shadow:
+0 12px 24px rgba(171, 96, 67, 0.18),
+inset 0 1px 0 rgba(255, 255, 255, 0.28);
+transition:
+transform 160ms ease,
+box-shadow 160ms ease,
+filter 160ms ease,
+opacity 160ms ease;
+}
+
+.staff-btn:hover {
+transform: translateY(-2px);
+box-shadow:
+0 18px 30px rgba(171, 96, 67, 0.24),
+inset 0 1px 0 rgba(255, 255, 255, 0.30);
+filter: saturate(1.04);
+}
+
+.staff-btn:active {
+transform: translateY(0);
+box-shadow:
+0 8px 16px rgba(171, 96, 67, 0.16),
+inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.staff-btn:focus-visible {
+outline: none;
+box-shadow:
+0 12px 24px rgba(171, 96, 67, 0.20),
+inset 0 1px 0 rgba(255, 255, 255, 0.30),
+0 0 0 4px rgba(201, 152, 79, 0.18);
+}
+
+.staff-btn.secondary {
+color: var(--staff-text-strong);
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(245, 235, 223, 0.96));
+border: 1px solid rgba(133, 86, 49, 0.18);
+box-shadow:
+0 10px 22px rgba(115, 77, 46, 0.08),
+inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.staff-btn.secondary:hover {
+box-shadow:
+0 14px 26px rgba(115, 77, 46, 0.12),
+inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.staff-btn.secondary.is-active,
+.staff-btn.secondary[aria-pressed="true"] {
+color: #fffaf4;
+border-color: transparent;
+background:
+linear-gradient(135deg, #ce9254 0%, #bf744c 58%, #8a4a58 100%);
+box-shadow:
+0 16px 28px rgba(171, 96, 67, 0.18),
+inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.staff-btn[disabled] {
+cursor: not-allowed;
+opacity: 0.55;
+transform: none;
+box-shadow:
+0 6px 14px rgba(115, 77, 46, 0.06),
+inset 0 1px 0 rgba(255, 255, 255, 0.30);
+}
+
+.staff-panel-title {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: 22px;
+letter-spacing: -0.02em;
+}
+
+.staff-view-tabs {
+display: flex;
+flex-wrap: wrap;
+gap: 10px;
+padding: 10px;
+border: 1px solid rgba(133, 86, 49, 0.12);
+border-radius: 24px;
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(248, 239, 229, 0.76));
+backdrop-filter: blur(12px);
+-webkit-backdrop-filter: blur(12px);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.7),
+0 14px 30px rgba(115, 77, 46, 0.08);
+}
+
+.staff-view-tab {
+display: inline-flex;
+gap: 8px;
+align-items: center;
+border: 0;
+border-radius: 999px;
+padding: 11px 16px;
+color: var(--staff-muted);
+background: transparent;
+font-weight: 800;
+cursor: pointer;
+transition:
+background 160ms ease,
+color 160ms ease,
+transform 160ms ease,
+box-shadow 160ms ease;
+}
+
+.staff-view-tab:hover {
+color: var(--staff-text-strong);
+background: rgba(201, 152, 79, 0.10);
+box-shadow: inset 0 0 0 1px rgba(201, 152, 79, 0.12);
+}
+
+.staff-view-tab.is-active {
+color: #fff9f4;
+background:
+linear-gradient(135deg, #ca8d55 0%, #b96f4b 55%, #84485a 100%);
+transform: translateY(-1px);
+box-shadow:
+0 10px 24px rgba(171, 96, 67, 0.20),
+inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.staff-view-tab.has-fresh-data:not(.is-active) {
+color: var(--staff-text-strong);
+background:
+radial-gradient(circle at top right, rgba(185, 78, 64, 0.24), transparent 1.9rem),
+linear-gradient(180deg, rgba(255, 244, 238, 0.96), rgba(246, 223, 219, 0.88));
+box-shadow:
+inset 0 0 0 1px rgba(185, 78, 64, 0.20),
+0 10px 24px rgba(185, 78, 64, 0.12);
+animation: staffFreshPulse 1.5s ease-in-out 0s 3;
+}
+
+.staff-view-tab.has-fresh-data:not(.is-active)::after {
+content: "New";
+display: inline-flex;
+align-items: center;
+justify-content: center;
+min-width: 34px;
+height: 22px;
+padding: 0 8px;
+border-radius: 999px;
+color: #fff9f4;
+background: var(--staff-danger);
+font-size: 10px;
+font-weight: 900;
+letter-spacing: 0.08em;
+text-transform: uppercase;
+}
+
+@keyframes staffFreshPulse {
+0%,
+100% {
+transform: translateY(0);
+}
+
+50% {
+transform: translateY(-2px);
+}
+}
+
+.staff-view-tab-count {
+display: inline-flex;
+min-width: 24px;
+height: 24px;
+align-items: center;
+justify-content: center;
+border-radius: 999px;
+color: var(--staff-text-strong);
+background: rgba(244, 231, 216, 0.96);
+border: 1px solid rgba(133, 86, 49, 0.10);
+font-size: 12px;
+font-weight: 900;
+box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.staff-view-tab.is-active .staff-view-tab-count {
+color: var(--staff-text-strong);
+background: rgba(255, 245, 233, 0.86);
+border-color: rgba(255, 255, 255, 0.18);
+}
+
+.staff-view-panel {
+display: grid;
+gap: 16px;
+}
+
+.staff-view-panel[hidden] {
+display: none;
+}
+
+.staff-dashboard-shell {
+position: relative;
+overflow: hidden;
+gap: 22px;
+padding: clamp(20px, 3vw, 30px);
+border-radius: 32px;
+border: 1px solid rgba(133, 86, 49, 0.12);
+background:
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.18), transparent 22rem),
+radial-gradient(circle at bottom left, rgba(125, 143, 99, 0.12), transparent 24rem),
+linear-gradient(145deg, rgba(255, 252, 247, 0.72), rgba(247, 239, 230, 0.84));
+backdrop-filter: blur(18px);
+-webkit-backdrop-filter: blur(18px);
+box-shadow: var(--staff-shadow-strong);
+}
+
+.staff-dashboard-shell::before {
+content: "";
+position: absolute;
+inset: 0;
+pointer-events: none;
+background:
+linear-gradient(90deg, rgba(255, 255, 255, 0.16) 1px, transparent 1px),
+linear-gradient(180deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+background-size: 48px 48px;
+mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.45), transparent 80%);
+}
+
+.staff-dashboard-shell::after {
+content: "";
+position: absolute;
+inset: 0;
+pointer-events: none;
+background:
+linear-gradient(135deg, rgba(255, 255, 255, 0.42), transparent 28%),
+radial-gradient(circle at 85% 15%, rgba(139, 67, 88, 0.08), transparent 10rem);
+}
+
+.staff-dashboard-shell > * {
+position: relative;
+z-index: 1;
+}
+
+.staff-dashboard-hero {
+display: flex;
+justify-content: space-between;
+gap: 18px;
+align-items: flex-start;
+padding: clamp(20px, 3vw, 28px);
+border: 1px solid rgba(133, 86, 49, 0.12);
+border-radius: 26px;
+background:
+linear-gradient(135deg, rgba(255, 250, 244, 0.78), rgba(244, 231, 216, 0.66)),
+rgba(255, 248, 241, 0.78);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.85),
+0 20px 44px rgba(115, 77, 46, 0.10);
+}
+
+.staff-dashboard-title {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: clamp(26px, 3vw, 38px);
+line-height: 1.05;
+letter-spacing: -0.03em;
+}
+
+.staff-dashboard-copy {
+max-width: 720px;
+margin-top: 10px;
+}
+
+.staff-dashboard-top-actions {
+display: flex;
+flex-wrap: wrap;
+gap: 10px;
+align-items: center;
+justify-content: flex-end;
+}
+
+.staff-dashboard-pill {
+display: inline-flex;
+align-items: center;
+gap: 7px;
+border: 1px solid rgba(133, 86, 49, 0.16);
+border-radius: 999px;
+padding: 10px 13px;
+color: var(--staff-maroon);
+background:
+linear-gradient(180deg, rgba(255, 247, 238, 0.9), rgba(247, 235, 223, 0.96));
+font-size: 12px;
+font-weight: 900;
+letter-spacing: 0.08em;
+text-transform: uppercase;
+white-space: nowrap;
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.82),
+0 8px 16px rgba(115, 77, 46, 0.06);
+}
+
+.staff-dashboard-pill.is-live {
+border-color: rgba(95, 128, 82, 0.22);
+color: var(--staff-success);
+background:
+linear-gradient(180deg, rgba(241, 250, 236, 0.92), rgba(228, 239, 224, 0.96));
+}
+
+.staff-dashboard-pill.is-warning {
+border-color: rgba(181, 91, 88, 0.22);
+color: var(--staff-danger);
+background:
+linear-gradient(180deg, rgba(255, 244, 241, 0.92), rgba(246, 223, 219, 0.96));
+}
+
+.staff-dashboard-pill.is-muted {
+border-color: rgba(133, 86, 49, 0.14);
+color: var(--staff-muted);
+background:
+linear-gradient(180deg, rgba(255, 250, 246, 0.84), rgba(247, 238, 228, 0.9));
+}
+
+.staff-dashboard-pill.is-live::before,
+.staff-dashboard-pill.is-warning::before,
+.staff-dashboard-pill.is-muted::before {
+content: "";
+width: 7px;
+height: 7px;
+border-radius: 999px;
+background: currentColor;
+box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.staff-dashboard-shortcuts {
+display: grid;
+grid-template-columns: repeat(3, minmax(0, 1fr));
+gap: 14px;
+}
+
+.staff-dashboard-shortcut {
+position: relative;
+display: grid;
+gap: 10px;
+min-height: 160px;
+border: 1px solid rgba(133, 86, 49, 0.14);
+border-radius: 24px;
+padding: 20px;
+color: var(--staff-text);
+text-align: left;
+background:
+linear-gradient(160deg, rgba(255, 255, 255, 0.70), rgba(248, 239, 229, 0.84)),
+rgba(255, 248, 241, 0.78);
+cursor: pointer;
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.84),
+0 18px 40px rgba(115, 77, 46, 0.08);
+transition:
+border-color 160ms ease,
+transform 160ms ease,
+background 160ms ease,
+box-shadow 160ms ease;
+overflow: hidden;
+}
+
+.staff-dashboard-shortcut::before {
+content: "";
+position: absolute;
+inset: 0;
+pointer-events: none;
+background:
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.18), transparent 11rem),
+linear-gradient(135deg, rgba(255, 255, 255, 0.26), transparent 30%);
+}
+
+.staff-dashboard-shortcut:nth-child(2)::before {
+background:
+radial-gradient(circle at top right, rgba(125, 143, 99, 0.18), transparent 11rem),
+linear-gradient(135deg, rgba(255, 255, 255, 0.26), transparent 30%);
+}
+
+.staff-dashboard-shortcut:nth-child(3)::before {
+background:
+radial-gradient(circle at top right, rgba(139, 67, 88, 0.14), transparent 11rem),
+linear-gradient(135deg, rgba(255, 255, 255, 0.26), transparent 30%);
+}
+
+.staff-dashboard-shortcut > * {
+position: relative;
+z-index: 1;
+}
+
+.staff-dashboard-shortcut:hover {
+border-color: rgba(159, 110, 49, 0.30);
+transform: translateY(-4px);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.92),
+0 24px 48px rgba(115, 77, 46, 0.14);
+}
+
+.staff-dashboard-shortcut-label {
+color: var(--staff-terracotta-deep);
+font-size: 11px;
+font-weight: 900;
+letter-spacing: 0.16em;
+text-transform: uppercase;
+}
+
+.staff-dashboard-shortcut-title {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: 21px;
+letter-spacing: -0.02em;
+}
+
+.staff-dashboard-shortcut-copy {
+margin: 0;
+color: var(--staff-muted);
+font-size: 13px;
+line-height: 1.62;
+}
+
+.staff-dashboard-shortcut-action {
+color: var(--staff-plum);
+font-size: 13px;
+font-weight: 900;
+}
+
+.staff-section-head {
+display: flex;
+flex-wrap: wrap;
+gap: 12px;
+align-items: flex-start;
+justify-content: space-between;
+padding: 18px;
+border: 1px solid rgba(133, 86, 49, 0.12);
+border-radius: 22px;
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(247, 238, 228, 0.84));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.82),
+0 14px 30px rgba(115, 77, 46, 0.08);
+}
+
+.staff-section-head h3 {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: 24px;
+letter-spacing: -0.02em;
+}
+
+.staff-section-copy {
+max-width: 700px;
+margin: 8px 0 0;
+color: var(--staff-muted);
+font-size: 13px;
+line-height: 1.62;
+}
+
+.staff-section-pill {
+display: inline-flex;
+align-items: center;
+border: 1px solid rgba(133, 86, 49, 0.14);
+border-radius: 999px;
+padding: 8px 11px;
+color: var(--staff-maroon);
+background:
+linear-gradient(180deg, rgba(255, 248, 241, 0.92), rgba(246, 235, 223, 0.96));
+font-size: 12px;
+font-weight: 900;
+letter-spacing: 0.06em;
+text-transform: uppercase;
+white-space: nowrap;
+box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.staff-section-meta {
+display: grid;
+gap: 8px;
+justify-items: end;
+}
+
+.staff-section-refresh-time {
+margin: 0;
+color: var(--staff-muted);
+font-size: 12px;
+font-weight: 800;
+letter-spacing: 0.04em;
+}
+
+.staff-empty {
+margin: 0;
+padding: 18px;
+border: 1px dashed rgba(133, 86, 49, 0.20);
+border-radius: 18px;
+color: var(--staff-muted);
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(248, 239, 229, 0.72));
+line-height: 1.7;
+}
+
+.staff-summary-grid {
+display: grid;
+grid-template-columns: repeat(4, minmax(0, 1fr));
+gap: 12px;
+}
+
+.staff-orders-reports {
+grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.staff-attention-grid {
+grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.staff-summary-card {
+position: relative;
+display: grid;
+gap: 8px;
+min-height: 128px;
+padding: 18px;
+border: 1px solid rgba(133, 86, 49, 0.14);
+border-radius: 22px;
+background:
+linear-gradient(160deg, rgba(255, 255, 255, 0.72), rgba(248, 239, 229, 0.84)),
+rgba(255, 248, 241, 0.78);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.84),
+0 18px 36px rgba(115, 77, 46, 0.08);
+overflow: hidden;
+}
+
+.staff-summary-card::before {
+content: "";
+position: absolute;
+inset: 0;
+pointer-events: none;
+background:
+linear-gradient(135deg, rgba(255, 255, 255, 0.34), transparent 36%),
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.12), transparent 10rem);
+}
+
+.staff-summary-card:nth-child(2)::before {
+background:
+linear-gradient(135deg, rgba(255, 255, 255, 0.34), transparent 36%),
+radial-gradient(circle at top right, rgba(125, 143, 99, 0.14), transparent 10rem);
+}
+
+.staff-summary-card:nth-child(3)::before {
+background:
+linear-gradient(135deg, rgba(255, 255, 255, 0.34), transparent 36%),
+radial-gradient(circle at top right, rgba(201, 116, 82, 0.14), transparent 10rem);
+}
+
+.staff-summary-card:nth-child(4)::before {
+background:
+linear-gradient(135deg, rgba(255, 255, 255, 0.34), transparent 36%),
+radial-gradient(circle at top right, rgba(139, 67, 88, 0.12), transparent 10rem);
+}
+
+.staff-summary-card > * {
+position: relative;
+z-index: 1;
+}
+
+.staff-orders-reports .staff-summary-card {
+min-height: 118px;
+}
+
+.staff-orders-reports .staff-summary-card.is-active-period {
+border-color: rgba(201, 152, 79, 0.28);
+background:
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.20), transparent 12rem),
+linear-gradient(160deg, rgba(255, 250, 243, 0.86), rgba(247, 235, 223, 0.94));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.92),
+0 18px 32px rgba(201, 152, 79, 0.12);
+}
+
+.staff-attention-grid .staff-summary-card {
+min-height: 112px;
+}
+
+.staff-summary-card.is-attention-new {
+border-color: rgba(201, 152, 79, 0.28);
+background:
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.22), transparent 12rem),
+linear-gradient(160deg, rgba(255, 251, 244, 0.88), rgba(248, 238, 225, 0.94));
+}
+
+.staff-summary-card.is-attention-payment {
+border-color: rgba(185, 78, 64, 0.24);
+background:
+radial-gradient(circle at top right, rgba(201, 116, 82, 0.20), transparent 12rem),
+linear-gradient(160deg, rgba(255, 249, 247, 0.88), rgba(251, 237, 232, 0.94));
+}
+
+.staff-summary-card.is-attention-billing {
+border-color: rgba(125, 143, 99, 0.22);
+background:
+radial-gradient(circle at top right, rgba(125, 143, 99, 0.18), transparent 12rem),
+linear-gradient(160deg, rgba(251, 255, 248, 0.88), rgba(239, 246, 232, 0.94));
+}
+
+#staffDashboardSummary .staff-summary-card:first-child {
+border-color: rgba(201, 152, 79, 0.20);
+background:
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.20), transparent 12rem),
+linear-gradient(160deg, rgba(255, 250, 243, 0.80), rgba(247, 235, 223, 0.90));
+}
+
+.staff-summary-label {
+margin: 0;
+color: var(--staff-muted);
+font-size: 11px;
+font-weight: 900;
+letter-spacing: 0.12em;
+text-transform: uppercase;
+}
+
+.staff-summary-value {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: clamp(28px, 3vw, 34px);
+font-weight: 900;
+letter-spacing: -0.04em;
+line-height: 1;
+}
+
+.staff-summary-note {
+margin: 0;
+color: var(--staff-muted);
+font-size: 13px;
+line-height: 1.48;
+}
+
+.staff-filter-status {
+margin: 0;
+padding: 13px 15px;
+border: 1px solid rgba(133, 86, 49, 0.12);
+border-radius: 16px;
+color: var(--staff-muted);
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(247, 238, 228, 0.74));
+font-size: 13px;
+line-height: 1.55;
+box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.staff-orders-list {
+display: grid;
+gap: 14px;
+}
+
+.staff-order-group {
+display: grid;
+gap: 12px;
+padding: 16px;
+border: 1px solid rgba(133, 86, 49, 0.14);
+border-radius: 22px;
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.60), rgba(247, 238, 228, 0.80));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.84),
+0 18px 38px rgba(115, 77, 46, 0.08);
+}
+
+.staff-order-group.is-qr-table {
+border-color: rgba(201, 152, 79, 0.24);
+background:
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.16), transparent 13rem),
+linear-gradient(180deg, rgba(255, 252, 247, 0.78), rgba(247, 238, 228, 0.88));
+}
+
+.staff-order-group.is-website {
+border-color: rgba(124, 95, 70, 0.16);
+background:
+radial-gradient(circle at top right, rgba(139, 67, 88, 0.10), transparent 13rem),
+linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(243, 237, 230, 0.84));
+}
+
+.staff-order-group-header {
+display: flex;
+flex-wrap: wrap;
+gap: 10px;
+align-items: center;
+justify-content: space-between;
+}
+
+.staff-order-group-title {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: 17px;
+letter-spacing: -0.01em;
+}
+
+.staff-order-group-note {
+margin: 4px 0 0;
+color: var(--staff-muted);
+font-size: 13px;
+line-height: 1.5;
+}
+
+.staff-order-group-metrics {
+display: flex;
+flex-wrap: wrap;
+gap: 8px;
+justify-content: flex-end;
+}
+
+.staff-order-group-count {
+display: inline-flex;
+align-items: center;
+border-radius: 999px;
+padding: 7px 11px;
+border: 1px solid rgba(161, 116, 76, 0.14);
+color: #fffaf4;
+background:
+linear-gradient(135deg, #ce9254 0%, #bf744c 58%, #8a4a58 100%);
+font-size: 12px;
+font-weight: 900;
+box-shadow:
+0 10px 18px rgba(171, 96, 67, 0.16),
+inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.staff-order-group.is-website .staff-order-group-count {
+border-color: rgba(118, 91, 69, 0.16);
+background:
+linear-gradient(135deg, #7b634d 0%, #9d7a5b 54%, #8a4a58 100%);
+}
+
+.staff-order-group-list {
+display: grid;
+gap: 12px;
+}
+
+.staff-order-family {
+display: grid;
+gap: 10px;
+}
+
+.staff-order-family-addons {
+display: grid;
+gap: 10px;
+padding-left: clamp(10px, 3vw, 24px);
+border-left: 2px solid rgba(116, 101, 163, 0.18);
+}
+
+.staff-order-family-label {
+margin: 0;
+color: var(--staff-muted);
+font-size: 12px;
+font-weight: 900;
+letter-spacing: 0.08em;
+text-transform: uppercase;
+}
+
+.staff-order-family-hint {
+margin: 0;
+padding: 10px 12px;
+border-radius: 14px;
+color: #5d4f87;
+background: rgba(116, 101, 163, 0.10);
+border: 1px solid rgba(116, 101, 163, 0.16);
+font-size: 12px;
+font-weight: 800;
+line-height: 1.45;
+}
+
+.staff-order-card {
+display: grid;
+gap: 12px;
+padding: 18px;
+border: 1px solid rgba(133, 86, 49, 0.14);
+border-radius: 20px;
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(250, 243, 235, 0.94));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.88),
+0 14px 28px rgba(115, 77, 46, 0.08);
+}
+
+.staff-order-card.is-new-order {
+border-color: rgba(201, 152, 79, 0.28);
+background:
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.18), transparent 13rem),
+linear-gradient(180deg, rgba(255, 252, 246, 0.92), rgba(250, 240, 229, 0.98));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.92),
+0 18px 36px rgba(201, 152, 79, 0.12);
+}
+
+.staff-order-card.is-new-support {
+border-color: rgba(185, 78, 64, 0.30);
+background:
+radial-gradient(circle at top right, rgba(201, 116, 82, 0.18), transparent 14rem),
+linear-gradient(180deg, rgba(255, 250, 246, 0.94), rgba(251, 238, 228, 0.98));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.92),
+0 18px 36px rgba(185, 78, 64, 0.12);
+}
+
+.staff-order-card.is-addon {
+border-color: rgba(116, 101, 163, 0.24);
+background:
+radial-gradient(circle at top right, rgba(116, 101, 163, 0.13), transparent 13rem),
+linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 239, 251, 0.92));
+}
+
+.staff-order-topline,
+.staff-order-meta,
+.staff-order-badges {
+display: flex;
+flex-wrap: wrap;
+gap: 10px;
+align-items: center;
+justify-content: space-between;
+}
+
+.staff-order-title {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: 18px;
+letter-spacing: -0.02em;
+}
+
+.staff-order-title-block {
+display: grid;
+gap: 4px;
+}
+
+.staff-order-subtitle {
+margin: 0;
+color: var(--staff-muted);
+font-size: 13px;
+font-weight: 700;
+letter-spacing: 0.01em;
+}
+
+.staff-order-time {
+color: var(--staff-muted);
+font-size: 13px;
+}
+
+.staff-badge {
+display: inline-flex;
+align-items: center;
+border-radius: 999px;
+padding: 6px 10px;
+color: var(--staff-text-strong);
+background:
+linear-gradient(180deg, rgba(255, 252, 247, 0.94), rgba(243, 232, 219, 0.98));
+border: 1px solid rgba(133, 86, 49, 0.12);
+font-size: 12px;
+font-weight: 800;
+box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+.staff-badge.is-important {
+color: #fff8f1;
+background:
+linear-gradient(135deg, #d29a59 0%, #c0724d 58%, #8b4656 100%);
+border-color: transparent;
+box-shadow:
+0 10px 18px rgba(171, 96, 67, 0.14),
+inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.staff-badge.is-success {
+color: var(--staff-success);
+background: var(--staff-success-soft);
+border-color: rgba(95, 128, 82, 0.22);
+}
+
+.staff-badge.is-warning {
+color: var(--staff-warning);
+background: var(--staff-warning-soft);
+border-color: rgba(169, 115, 36, 0.24);
+}
+
+.staff-badge.is-danger {
+color: var(--staff-danger);
+background: var(--staff-danger-soft);
+border-color: rgba(181, 91, 88, 0.22);
+}
+
+.staff-badge.is-alert {
+color: #fff8f1;
+background:
+linear-gradient(135deg, #c96553 0%, #a84d54 58%, #763c55 100%);
+border-color: transparent;
+box-shadow:
+0 10px 20px rgba(168, 77, 84, 0.18),
+inset 0 1px 0 rgba(255, 255, 255, 0.20);
+}
+
+.staff-badge.is-addon {
+color: #5d4f92;
+background: rgba(116, 101, 163, 0.12);
+border-color: rgba(116, 101, 163, 0.22);
+}
+
+.staff-order-items {
+margin: 0;
+padding-left: 20px;
+color: var(--staff-text);
+line-height: 1.72;
+}
+
+.staff-order-note {
+margin: 0;
+color: var(--staff-muted);
+line-height: 1.6;
+}
+
+.staff-order-meta span {
+display: inline-flex;
+align-items: center;
+padding: 7px 10px;
+border-radius: 14px;
+border: 1px solid rgba(133, 86, 49, 0.10);
+background: rgba(255, 255, 255, 0.55);
+box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74);
+}
+
+.staff-order-actions {
+display: flex;
+flex-wrap: wrap;
+gap: 10px;
+align-items: center;
+padding-top: 6px;
+}
+
+.staff-record-status-actions {
+border-top: 1px solid rgba(133, 86, 49, 0.12);
+margin-top: 4px;
+padding-top: 14px;
+}
+
+.staff-status-control-label {
+color: var(--staff-muted);
+font-size: 0.78rem;
+font-weight: 800;
+letter-spacing: 0.12em;
+text-transform: uppercase;
+}
+
+.staff-status-select {
+min-width: 170px;
+width: auto;
+}
+
+#staffDashboardWrap {
+display: none;
+}
+
+@media (max-width: 760px) {
+.staff-wrap {
+width: min(1120px, calc(100% - 20px));
+padding: 22px 0 28px;
+}
+
+.staff-grid,
+.staff-header {
+grid-template-columns: 1fr;
+display: grid;
+}
+
+.staff-header {
+gap: 12px;
+margin-bottom: 18px;
+}
+
+.staff-dashboard-hero {
+display: grid;
+gap: 16px;
+padding: 18px;
+}
+
+.staff-dashboard-top-actions {
+justify-content: flex-start;
+}
+
+.staff-summary-grid {
+grid-template-columns: 1fr;
+}
+
+.staff-dashboard-shortcuts {
+grid-template-columns: 1fr;
+}
+
+.staff-section-head {
+display: grid;
+}
+
+.staff-view-tabs {
+border-radius: 20px;
+padding: 8px;
+}
+
+.staff-view-tab {
+flex: 1 1 calc(50% - 10px);
+justify-content: center;
+}
+
+.staff-card {
+padding: 18px;
+border-radius: 22px;
+}
+
+.staff-order-card,
+.staff-order-group,
+.staff-section-head,
+.staff-empty {
+border-radius: 18px;
+}
+
+.staff-input,
+.staff-select {
+min-height: 46px;
+}
+
+.staff-actions {
+display: grid;
+grid-template-columns: 1fr;
+align-items: stretch;
+}
+
+.staff-orders-search,
+.staff-actions .staff-btn,
+.staff-status-select {
+width: 100%;
+min-width: 0;
+}
+
+.staff-order-group-header,
+.staff-order-topline,
+.staff-order-meta,
+.staff-order-badges,
+.staff-order-actions,
+.staff-record-status-actions {
+display: grid;
+justify-content: stretch;
+justify-items: stretch;
+align-items: start;
+}
+
+.staff-order-group-metrics {
+justify-content: flex-start;
+}
+
+.staff-order-time {
+display: inline-flex;
+justify-content: flex-start;
+}
+
+.staff-order-card {
+gap: 14px;
+padding: 16px;
+}
+
+.staff-order-items {
+padding-left: 18px;
+}
+}
+
+
+</style>
+</head>
+<body>
+  <main class="staff-wrap">
+    <header class="staff-header">
+      <div>
+        <p class="staff-kicker">Limited Hotel Access</p>
+        <h1 class="staff-title">Staff Orders</h1>
+        <p class="staff-sub">
+          A separate billing screen for one hotel at a time. This page is intentionally separate from the full admin dashboard.
+        </p>
+      </div>
+    </header>
+
+    <section id="staffLoginWrap" class="staff-grid" aria-label="Staff login">
+      <div class="staff-card">
+        <div>
+          <p class="staff-kicker">Secure Login</p>
+          <h2 class="staff-panel-title">Open hotel billing view</h2>
+          <p class="staff-hint">Use the hotel slug and staff PIN created for that hotel.</p>
+        </div>
+
+        <form id="staffLoginForm" class="staff-form">
+          <div class="staff-field">
+            <label class="staff-label" for="staffHotelSlugInput">Hotel Slug</label>
+            <input id="staffHotelSlugInput" class="staff-input" name="hotelSlug" placeholder="hotel-example" autocomplete="organization" required />
+          </div>
+
+          <div class="staff-field">
+            <label class="staff-label" for="staffPinInput">Staff PIN</label>
+            <input id="staffPinInput" class="staff-input" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required />
+          </div>
+
+          <div class="staff-actions">
+            <button class="staff-btn" type="submit">Login</button>
+          </div>
+
+          <p id="staffLoginStatus" class="staff-status">Enter the hotel slug and staff PIN to open this hotel's billing view.</p>
+        </form>
+      </div>
+
+      <aside class="staff-card">
+        <p class="staff-kicker">Scope</p>
+        <h2 class="staff-panel-title">One hotel only</h2>
+        <p class="staff-empty">
+          Staff users will only see orders for the hotel attached to their staff token. They will not get access to the full admin dashboard.
+        </p>
+      </aside>
+    </section>
+
+    <section id="staffDashboardWrap" class="staff-card staff-dashboard-shell" aria-label="Staff orders dashboard">
+      <div class="staff-dashboard-hero">
+        <div>
+          <p class="staff-kicker">Owner Workspace</p>
+          <h2 class="staff-dashboard-title">Dashboard for <span id="staffSessionHotel">this hotel</span></h2>
+          <p class="staff-hint staff-dashboard-copy">A limited, hotel-scoped view for orders, billing, table support, reservations, inquiries, and contact messages. Raw records stay hidden until you open a section.</p>
+        </div>
+
+        <div class="staff-dashboard-top-actions">
+          <span class="staff-dashboard-pill">Hotel scoped</span>
+          <span id="staffLiveRefreshStatus" class="staff-dashboard-pill is-live" aria-live="polite">Live updates on</span>
+          <button id="staffLogoutBtn" class="staff-btn secondary" type="button">Logout</button>
+        </div>
+      </div>
+
+      <div class="staff-view-tabs" role="tablist" aria-label="Staff dashboard sections">
+        <button class="staff-view-tab is-active" type="button" data-staff-view="dashboard" aria-selected="true">Dashboard</button>
+        <button class="staff-view-tab" type="button" data-staff-view="orders" aria-selected="false">Orders <span id="staffOrdersTabCount" class="staff-view-tab-count">0</span></button>
+        <button class="staff-view-tab" type="button" data-staff-view="support" aria-selected="false">Support <span id="staffSupportTabCount" class="staff-view-tab-count">0</span></button>
+        <button class="staff-view-tab" type="button" data-staff-view="reservations" aria-selected="false">Reservations <span id="staffReservationsTabCount" class="staff-view-tab-count">0</span></button>
+        <button class="staff-view-tab" type="button" data-staff-view="inquiries" aria-selected="false">Inquiries <span id="staffInquiriesTabCount" class="staff-view-tab-count">0</span></button>
+        <button class="staff-view-tab" type="button" data-staff-view="contacts" aria-selected="false">Contacts <span id="staffContactsTabCount" class="staff-view-tab-count">0</span></button>
+        <button class="staff-view-tab" type="button" data-staff-view="testimonials" aria-selected="false">Testimonials <span id="staffTestimonialsTabCount" class="staff-view-tab-count">0</span></button>
+      </div>
+
+      <section id="staffHomePanel" class="staff-view-panel" data-staff-view-panel="dashboard" aria-label="Staff dashboard overview">
+        <div>
+          <p class="staff-kicker">Owner Snapshot</p>
+          <h3 class="staff-panel-title">Order dashboard</h3>
+          <p class="staff-hint">This overview shows earnings, payment, billing, and source totals. Open Orders, Support, Reservations, Inquiries, or Contacts to see detailed records.</p>
+          <p id="staffDashboardLastUpdated" class="staff-section-refresh-time">Not refreshed yet</p>
+        </div>
+
+        <div id="staffDashboardSummary" class="staff-summary-grid" hidden></div>
+        <p id="staffDashboardEmpty" class="staff-empty">Login to load the dashboard summary.</p>
+        <p id="staffDashboardReportsCopy" class="staff-section-copy" hidden>Quick daily, weekly, and monthly order reports for this hotel.</p>
+        <div id="staffDashboardReports" class="staff-summary-grid" hidden></div>
+        <div id="staffDashboardSupportSummary" class="staff-summary-grid" hidden></div>
+
+        <div class="staff-dashboard-shortcuts" aria-label="Dashboard shortcuts">
+          <button class="staff-dashboard-shortcut" type="button" data-staff-view="orders">
+            <span class="staff-dashboard-shortcut-label">Billing</span>
+            <h4 class="staff-dashboard-shortcut-title">Open Orders</h4>
+            <p class="staff-dashboard-shortcut-copy">Review food orders, QR table orders, totals, and billing actions.</p>
+            <span class="staff-dashboard-shortcut-action">View order records</span>
+          </button>
+
+          <button class="staff-dashboard-shortcut" type="button" data-staff-view="reservations">
+            <span class="staff-dashboard-shortcut-label">Tables</span>
+            <h4 class="staff-dashboard-shortcut-title">Open Reservations</h4>
+            <p class="staff-dashboard-shortcut-copy">Check reservation requests, guest count, date, time, and notes.</p>
+            <span class="staff-dashboard-shortcut-action">View reservations</span>
+          </button>
+
+          <button class="staff-dashboard-shortcut" type="button" data-staff-view="support">
+            <span class="staff-dashboard-shortcut-label">Table Support</span>
+            <h4 class="staff-dashboard-shortcut-title">Open Requests</h4>
+            <p class="staff-dashboard-shortcut-copy">See QR table bill and staff-help requests from customer tracking pages.</p>
+            <span class="staff-dashboard-shortcut-action">View table support</span>
+          </button>
+
+          <button class="staff-dashboard-shortcut" type="button" data-staff-view="inquiries">
+            <span class="staff-dashboard-shortcut-label">Events</span>
+            <h4 class="staff-dashboard-shortcut-title">Open Inquiries</h4>
+            <p class="staff-dashboard-shortcut-copy">See event inquiries, guest requirements, phone numbers, and status.</p>
+            <span class="staff-dashboard-shortcut-action">View inquiries</span>
+          </button>
+
+          <button class="staff-dashboard-shortcut" type="button" data-staff-view="contacts">
+            <span class="staff-dashboard-shortcut-label">Messages</span>
+            <h4 class="staff-dashboard-shortcut-title">Open Contacts</h4>
+            <p class="staff-dashboard-shortcut-copy">Review website contact messages, email addresses, subjects, and follow-up status.</p>
+            <span class="staff-dashboard-shortcut-action">View contact messages</span>
+          </button>
+
+          <button class="staff-dashboard-shortcut" type="button" data-staff-view="testimonials">
+            <span class="staff-dashboard-shortcut-label">Reviews</span>
+            <h4 class="staff-dashboard-shortcut-title">Open Testimonials</h4>
+            <p class="staff-dashboard-shortcut-copy">Approve or pause guest reviews for this hotel without opening the full admin dashboard.</p>
+            <span class="staff-dashboard-shortcut-action">Moderate testimonials</span>
+          </button>
+        </div>
+      </section>
+
+      <section id="staffOrdersPanel" class="staff-view-panel" data-staff-view-panel="orders" aria-label="Staff orders" hidden>
+        <div class="staff-section-head">
+          <div>
+            <p class="staff-kicker">Order Records</p>
+            <h3>Orders and billing</h3>
+            <p class="staff-section-copy">Use this section when the staff needs to review order details, table source, payment status, and billing actions.</p>
+          </div>
+          <div class="staff-section-meta">
+            <span class="staff-section-pill">Actions enabled</span>
+            <p id="staffOrdersLastUpdated" class="staff-section-refresh-time">Not refreshed yet</p>
+          </div>
+        </div>
+
+        <div class="staff-actions">
+          <input id="staffOrdersSearchInput" class="staff-input staff-orders-search" type="search" placeholder="Search customer, phone, address, table, or order id" aria-label="Search orders" />
+          <select id="staffOrdersRangeInput" class="staff-select" aria-label="Order range">
+            <option value="today">Today</option>
+            <option value="week">Last 7 days</option>
+            <option value="month">This month</option>
+            <option value="recent" selected>Recent</option>
+            <option value="all">All recent</option>
+          </select>
+          <select id="staffOrdersSourceInput" class="staff-select" aria-label="Order source">
+            <option value="all" selected>All sources</option>
+            <option value="qr-table">QR table orders</option>
+            <option value="website">Website orders</option>
+          </select>
+          <select id="staffOrdersTableInput" class="staff-select" aria-label="Table number">
+            <option value="all" selected>All tables</option>
+          </select>
+          <select id="staffOrdersPaymentInput" class="staff-select" aria-label="Payment status">
+            <option value="all" selected>All payments</option>
+            <option value="paid">Paid only</option>
+            <option value="unpaid">Unpaid only</option>
+          </select>
+          <select id="staffOrdersBillingInput" class="staff-select" aria-label="Billing status">
+            <option value="all" selected>All billing</option>
+            <option value="billed">Billed only</option>
+            <option value="unbilled">Unbilled only</option>
+          </select>
+          <select id="staffOrdersStatusInput" class="staff-select" aria-label="Order status">
+            <option value="all" selected>All statuses</option>
+            <option value="new">Received only</option>
+            <option value="confirmed">Confirmed only</option>
+            <option value="preparing">Preparing only</option>
+            <option value="completed">Completed only</option>
+            <option value="cancelled">Cancelled only</option>
+          </select>
+          <button id="staffOrdersAttentionToggle" class="staff-btn secondary" type="button" aria-pressed="false">Needs Attention</button>
+          <button id="staffClearFiltersBtn" class="staff-btn secondary" type="button">Clear Filters</button>
+          <button id="staffRefreshOrdersBtn" class="staff-btn secondary" type="button">Refresh Orders</button>
+        </div>
+
+        <p id="staffOrdersReportsCopy" class="staff-section-copy" hidden>Today, weekly, and monthly context for this hotel while staff works through live orders.</p>
+        <div id="staffOrdersReports" class="staff-summary-grid staff-orders-reports" hidden></div>
+        <p id="staffOrdersAttentionCopy" class="staff-section-copy" hidden>Priority work for the currently visible order list.</p>
+        <div id="staffOrdersAttentionSummary" class="staff-summary-grid staff-attention-grid" hidden></div>
+
+        <p id="staffOrdersFilterStatus" class="staff-filter-status" hidden></p>
+
+        <div id="staffOrdersContent" class="staff-empty">
+          Login to load orders for the selected range.
+        </div>
+      </section>
+
+      <section id="staffSupportPanel" class="staff-view-panel" data-staff-view-panel="support" aria-label="Staff table support requests" hidden>
+        <div class="staff-section-head">
+          <div>
+            <p class="staff-kicker">Table Support</p>
+            <h3>Bill and help requests</h3>
+            <p class="staff-section-copy">Use this section to follow QR/table customer requests from the order tracking page. These records are limited to this hotel only.</p>
+          </div>
+          <div class="staff-section-meta">
+            <span class="staff-section-pill">Status actions</span>
+            <p id="staffSupportLastUpdated" class="staff-section-refresh-time">Not refreshed yet</p>
+          </div>
+        </div>
+
+        <div class="staff-actions">
+          <select id="staffSupportRangeInput" class="staff-select" aria-label="Support request range">
+            <option value="today">Today</option>
+            <option value="week">Last 7 days</option>
+            <option value="recent" selected>Recent</option>
+            <option value="all">All recent</option>
+          </select>
+          <select id="staffSupportStatusInput" class="staff-select" aria-label="Support request status">
+            <option value="all" selected>All support statuses</option>
+            <option value="new">New only</option>
+            <option value="acknowledged">Acknowledged only</option>
+            <option value="resolved">Resolved only</option>
+            <option value="closed">Closed only</option>
+          </select>
+          <button id="staffRefreshSupportBtn" class="staff-btn secondary" type="button">Refresh Support</button>
+        </div>
+
+        <div id="staffSupportSummary" class="staff-summary-grid" hidden></div>
+
+        <div id="staffSupportContent" class="staff-empty">
+          Open Support to load hotel-scoped table requests.
+        </div>
+      </section>
+
+      <section id="staffReservationsPanel" class="staff-view-panel" data-staff-view-panel="reservations" aria-label="Staff reservations" hidden>
+        <div class="staff-section-head">
+          <div>
+            <p class="staff-kicker">Reservation Records</p>
+            <h3>Reservations</h3>
+            <p class="staff-section-copy">Use this section to see who reserved a table, their date, time, guest count, phone number, and notes.</p>
+          </div>
+          <span class="staff-section-pill">Status actions</span>
+        </div>
+
+        <div class="staff-actions">
+          <select id="staffReservationsRangeInput" class="staff-select" aria-label="Reservation range">
+            <option value="today">Today</option>
+            <option value="week">Last 7 days</option>
+            <option value="recent" selected>Recent</option>
+            <option value="all">All recent</option>
+          </select>
+          <select id="staffReservationsStatusInput" class="staff-select" aria-label="Reservation status">
+            <option value="all" selected>All reservation statuses</option>
+            <option value="new">New only</option>
+            <option value="confirmed">Confirmed only</option>
+            <option value="seated">Seated only</option>
+            <option value="completed">Completed only</option>
+            <option value="cancelled">Cancelled only</option>
+          </select>
+          <button id="staffRefreshReservationsBtn" class="staff-btn secondary" type="button">Refresh Reservations</button>
+        </div>
+
+        <div id="staffReservationsSummary" class="staff-summary-grid" hidden></div>
+
+        <div id="staffReservationsContent" class="staff-empty">
+          Open Reservations to load hotel-scoped reservation requests.
+        </div>
+      </section>
+
+      <section id="staffInquiriesPanel" class="staff-view-panel" data-staff-view-panel="inquiries" aria-label="Staff inquiries" hidden>
+        <div class="staff-section-head">
+          <div>
+            <p class="staff-kicker">Inquiry Records</p>
+            <h3>Inquiries</h3>
+            <p class="staff-section-copy">Use this section to follow event inquiries, guest requirements, phone numbers, and current inquiry status.</p>
+          </div>
+          <span class="staff-section-pill">Status actions</span>
+        </div>
+
+        <div class="staff-actions">
+          <select id="staffInquiriesRangeInput" class="staff-select" aria-label="Inquiry range">
+            <option value="today">Today</option>
+            <option value="week">Last 7 days</option>
+            <option value="recent" selected>Recent</option>
+            <option value="all">All recent</option>
+          </select>
+          <select id="staffInquiriesStatusInput" class="staff-select" aria-label="Inquiry status">
+            <option value="all" selected>All inquiry statuses</option>
+            <option value="new">New only</option>
+            <option value="contacted">Contacted only</option>
+            <option value="converted">Converted only</option>
+            <option value="closed">Closed only</option>
+          </select>
+          <button id="staffRefreshInquiriesBtn" class="staff-btn secondary" type="button">Refresh Inquiries</button>
+        </div>
+
+        <div id="staffInquiriesSummary" class="staff-summary-grid" hidden></div>
+
+        <div id="staffInquiriesContent" class="staff-empty">
+          Open Inquiries to load hotel-scoped inquiry requests.
+        </div>
+      </section>
+
+      <section id="staffContactsPanel" class="staff-view-panel" data-staff-view-panel="contacts" aria-label="Staff contact messages" hidden>
+        <div class="staff-section-head">
+          <div>
+            <p class="staff-kicker">Contact Messages</p>
+            <h3>Website contact form</h3>
+            <p class="staff-section-copy">Use this section to follow general website contact messages for this hotel only.</p>
+          </div>
+          <span class="staff-section-pill">Status actions</span>
+        </div>
+
+        <div class="staff-actions">
+          <select id="staffContactsRangeInput" class="staff-select" aria-label="Contact message range">
+            <option value="today">Today</option>
+            <option value="week">Last 7 days</option>
+            <option value="recent" selected>Recent</option>
+            <option value="all">All recent</option>
+          </select>
+          <select id="staffContactsStatusInput" class="staff-select" aria-label="Contact message status">
+            <option value="all" selected>All contact statuses</option>
+            <option value="new">New only</option>
+            <option value="contacted">Contacted only</option>
+            <option value="resolved">Resolved only</option>
+            <option value="closed">Closed only</option>
+            <option value="archived">Archived only</option>
+          </select>
+          <button id="staffRefreshContactsBtn" class="staff-btn secondary" type="button">Refresh Contacts</button>
+        </div>
+
+        <div id="staffContactsSummary" class="staff-summary-grid" hidden></div>
+
+        <div id="staffContactsContent" class="staff-empty">
+          Open Contacts to load hotel-scoped contact messages.
+        </div>
+      </section>
+
+      <section id="staffTestimonialsPanel" class="staff-view-panel" data-staff-view-panel="testimonials" aria-label="Staff testimonials" hidden>
+        <div class="staff-section-head">
+          <div>
+            <p class="staff-kicker">Guest Reviews</p>
+            <h3>Testimonials</h3>
+            <p class="staff-section-copy">Use this section to approve or pause public testimonials for this hotel only.</p>
+          </div>
+          <span class="staff-section-pill">Approval actions</span>
+        </div>
+
+        <div class="staff-actions">
+          <select id="staffTestimonialsRangeInput" class="staff-select" aria-label="Testimonials range">
+            <option value="today">Today</option>
+            <option value="week">Last 7 days</option>
+            <option value="recent" selected>Recent</option>
+            <option value="all">All recent</option>
+          </select>
+          <select id="staffTestimonialsApprovalInput" class="staff-select" aria-label="Testimonial approval filter">
+            <option value="all" selected>All testimonials</option>
+            <option value="pending">Pending approval</option>
+            <option value="approved">Approved only</option>
+          </select>
+          <button id="staffRefreshTestimonialsBtn" class="staff-btn secondary" type="button">Refresh Testimonials</button>
+        </div>
+
+        <div id="staffTestimonialsSummary" class="staff-summary-grid" hidden></div>
+
+        <div id="staffTestimonialsContent" class="staff-empty">
+          Open Testimonials to load hotel-scoped reviews.
+        </div>
+      </section>
+    </section>
+  </main>
+  <script src="js/app-config.js"></script>
+  <script src="js/staff-orders.js" defer></script>
+</body>
+</html>
