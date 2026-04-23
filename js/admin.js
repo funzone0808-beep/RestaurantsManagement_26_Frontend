@@ -267,7 +267,7 @@ function syncQrTableLinkHotelSlug({ force = false } = {}) {
   }
 }
 
-function buildQrTableOrderUrl({ hotelSlug, tableNumber, targetPage }) {
+function buildQrTableOrderUrl({ hotelSlug, tableNumber, targetPage, qrContextToken = "" }) {
   const safePage = targetPage === "index.html" ? "index.html" : "menu.html";
   const url = new URL(safePage, window.location.href);
 
@@ -276,6 +276,9 @@ function buildQrTableOrderUrl({ hotelSlug, tableNumber, targetPage }) {
   url.searchParams.set("hotel", hotelSlug);
   url.searchParams.set("table", tableNumber);
   url.searchParams.set("source", "qr");
+  if (qrContextToken) {
+    url.searchParams.set("qctx", qrContextToken);
+  }
 
   return url.href;
 }
@@ -299,7 +302,23 @@ function updateQrTableLinkOutput(link = "", message = "", summary = "") {
   }
 }
 
-function generateQrTableLink() {
+async function fetchSignedQrContextToken({ hotelSlug, tableNumber, orderSource = "qr" }) {
+  const result = await fetchJson(`${API_BASE}/qr-links/sign`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      hotelSlug,
+      tableNumber,
+      orderSource
+    })
+  });
+
+  return String(result?.qrContextToken || "").trim();
+}
+
+async function generateQrTableLink() {
   const hotelSlug = normalizeQrLinkValue(
     document.getElementById("qrLinkHotelSlugInput")?.value,
     120
@@ -316,10 +335,29 @@ function generateQrTableLink() {
     return "";
   }
 
-  const link = buildQrTableOrderUrl({ hotelSlug, tableNumber, targetPage });
+  let qrContextToken = "";
+  let helperMessage = "";
+
+  try {
+    qrContextToken = await fetchSignedQrContextToken({
+      hotelSlug,
+      tableNumber,
+      orderSource: "qr"
+    });
+  } catch (error) {
+    console.warn("QR link signing failed, using legacy link:", error.message);
+    helperMessage = "Signed QR token is unavailable right now. Generated a legacy link so your current QR flow still works.";
+  }
+
+  const link = buildQrTableOrderUrl({
+    hotelSlug,
+    tableNumber,
+    targetPage,
+    qrContextToken
+  });
   updateQrTableLinkOutput(
     link,
-    "",
+    helperMessage,
     `QR target: ${hotelSlug} / ${tableNumber} / ${targetPage === "index.html" ? "Homepage menu section" : "Full menu page"}`
   );
   return link;
@@ -327,7 +365,7 @@ function generateQrTableLink() {
 
 async function copyQrTableLink() {
   const output = document.getElementById("qrTableLinkOutput");
-  const link = output?.value.trim() || generateQrTableLink();
+  const link = output?.value.trim() || await generateQrTableLink();
 
   if (!link) return;
 
@@ -1920,6 +1958,7 @@ function buildOrderBillTotalsRows(order = {}) {
   const rows = [];
   const subtotal = getNumberValue(totals.subtotal);
   const gst = getNumberValue(totals.gst);
+  const deliveryCharge = getNumberValue(totals.deliveryCharge);
   const normalTotal = getNumberValue(totals.normalTotal);
   const upiDiscountPercent = getNumberValue(totals.upiDiscountPercent);
   const gpayDiscount = getNumberValue(totals.gpayDiscount);
@@ -1931,6 +1970,12 @@ function buildOrderBillTotalsRows(order = {}) {
 
   if (gst !== null) {
     rows.push(`<tr><th>GST</th><td>${escapeHTML(formatBillMoney(gst))}</td></tr>`);
+  }
+
+  if (deliveryCharge !== null && deliveryCharge > 0) {
+    rows.push(
+      `<tr><th>Delivery Charge</th><td>${escapeHTML(formatBillMoney(deliveryCharge))}</td></tr>`
+    );
   }
 
   if (isUpiOrder(order) && normalTotal !== null) {
@@ -2823,7 +2868,7 @@ function bindQrTableLinkHelper() {
   if (form && form.dataset.boundSubmit !== "true") {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      generateQrTableLink();
+      void generateQrTableLink();
     });
     form.dataset.boundSubmit = "true";
   }
@@ -2839,7 +2884,7 @@ function bindQrTableLinkHelper() {
     previewLink.addEventListener("click", (event) => {
       if (!previewLink.getAttribute("href") || previewLink.getAttribute("href") === "#") {
         event.preventDefault();
-        generateQrTableLink();
+        void generateQrTableLink();
       }
     });
     previewLink.dataset.boundClick = "true";
@@ -3805,6 +3850,8 @@ function fillProfileThemeFields(theme) {
     loadingScreen.textColor || "";
   document.getElementById("profileUpiDiscountPercentInput").value =
     payment.upiDiscountPercent ?? "";
+  document.getElementById("profileDeliveryChargeInput").value =
+    payment.deliveryCharge ?? "";
   setInputValue("profileNavLabelAboutInput", navLabels.about);
   setInputValue("profileNavLabelMenuInput", navLabels.menu);
   setInputValue("profileNavLabelGalleryInput", navLabels.gallery);
@@ -4157,6 +4204,10 @@ function buildProfileThemePayload(currentHotelSlug) {
     "profileUpiDiscountPercentInput",
     "Google Pay / UPI discount percentage"
   );
+  const deliveryCharge = getOptionalNumberInputValue(
+    "profileDeliveryChargeInput",
+    "Website delivery charge"
+  );
   const showAbout = Boolean(document.getElementById("profileThemeShowAboutInput")?.checked);
   const showEvents = Boolean(document.getElementById("profileThemeShowEventsInput")?.checked);
   const showReservation = Boolean(
@@ -4239,16 +4290,37 @@ function buildProfileThemePayload(currentHotelSlug) {
   applyManagedContentGroup("ctaLabels", ctaLabelValues);
   applyManagedContentGroup("footerLabels", footerLabelValues);
 
-  if (upiDiscountPercent !== null) {
-    nextTheme.payment = {
-      ...(nextTheme.payment && typeof nextTheme.payment === "object" && !Array.isArray(nextTheme.payment)
-        ? nextTheme.payment
-        : {}),
-      upiDiscountPercent
-    };
+  if (deliveryCharge !== null && deliveryCharge < 0) {
+    throw new Error("Website delivery charge must be 0 or more.");
+  }
+
+  if (upiDiscountPercent !== null || deliveryCharge !== null) {
+    const nextPayment =
+      nextTheme.payment && typeof nextTheme.payment === "object" && !Array.isArray(nextTheme.payment)
+        ? { ...nextTheme.payment }
+        : {};
+
+    if (upiDiscountPercent !== null) {
+      nextPayment.upiDiscountPercent = upiDiscountPercent;
+    } else {
+      delete nextPayment.upiDiscountPercent;
+    }
+
+    if (deliveryCharge !== null) {
+      nextPayment.deliveryCharge = deliveryCharge;
+    } else {
+      delete nextPayment.deliveryCharge;
+    }
+
+    if (Object.keys(nextPayment).length) {
+      nextTheme.payment = nextPayment;
+    } else {
+      delete nextTheme.payment;
+    }
   } else if (nextTheme.payment && typeof nextTheme.payment === "object" && !Array.isArray(nextTheme.payment)) {
     const nextPayment = { ...nextTheme.payment };
     delete nextPayment.upiDiscountPercent;
+    delete nextPayment.deliveryCharge;
 
     if (Object.keys(nextPayment).length) {
       nextTheme.payment = nextPayment;

@@ -242,11 +242,16 @@ function getActiveOrderContext(rawContext = window.APP_STATE?.orderContext || {}
     context.addToken || context.trackingToken,
     200,
   );
+  const qrContextToken = normalizeOrderContextText(
+    context.qrContextToken || context.qctx,
+    2000,
+  );
 
   return {
     orderType,
     tableNumber,
     orderSource,
+    qrContextToken,
     addToOrderId,
     addToken
   };
@@ -273,6 +278,7 @@ function syncOrderContextUI() {
 
   const context = getActiveOrderContext();
   let notice = document.getElementById("orderContextNotice");
+  const addressField = document.getElementById("orderAddressField");
   const addressInput = document.getElementById("orderAddress");
   const addressLabel = document.querySelector('label[for="orderAddress"]');
 
@@ -292,7 +298,13 @@ function syncOrderContextUI() {
 
   if (!hasDineInOrderContext(context)) {
     if (notice) notice.remove();
+    if (addressField) {
+      addressField.hidden = false;
+    }
     if (addressInput) {
+      if (!addressInput.value && addressInput.dataset.websiteValue) {
+        addressInput.value = addressInput.dataset.websiteValue;
+      }
       addressInput.required = true;
       addressInput.placeholder =
         addressInput.dataset.originalPlaceholder || "Enter full address";
@@ -304,7 +316,15 @@ function syncOrderContextUI() {
     return;
   }
 
+  if (addressField) {
+    addressField.hidden = true;
+  }
+
   if (addressInput) {
+    if (addressInput.value) {
+      addressInput.dataset.websiteValue = addressInput.value;
+    }
+    addressInput.value = "";
     addressInput.required = false;
     addressInput.placeholder = `Optional note for table ${context.tableNumber}`;
   }
@@ -326,8 +346,20 @@ function syncOrderContextUI() {
   notice.innerHTML = `
     <span class="order-context-kicker">${isAddonContext ? "Adding to active table order" : "Dine-in QR order"}</span>
     <strong>Table ${escapeHTML(context.tableNumber)}</strong>
-    <small>${isAddonContext ? `New items will be saved as an add-on for order #${escapeHTML(context.addToOrderId)}.` : "We detected this table link. Normal checkout fields are still available as fallback."}</small>
+    <small>${isAddonContext ? `New items will be saved as an add-on for order #${escapeHTML(context.addToOrderId)}.` : "We detected this table link. Delivery address is hidden for dine-in ordering, and you can still add a special note below."}</small>
   `;
+}
+
+function clearCheckoutAddressState(form = document.getElementById("checkoutForm")) {
+  const checkoutForm = form || document.getElementById("checkoutForm");
+  if (!checkoutForm) return;
+
+  const addressInput = checkoutForm.querySelector("#orderAddress");
+  if (addressInput?.dataset) {
+    delete addressInput.dataset.websiteValue;
+  }
+
+  syncOrderContextUI();
 }
 
 function syncTableCartResumeNotice() {
@@ -1965,10 +1997,25 @@ function removeFromCart(itemId) {
 
 function calculateCartTotals(items = CART) {
   const safeItems = normalizeCartItems(items);
+  const orderContext = getActiveOrderContext();
   const subtotal = safeItems.reduce((sum, item) => sum + item.price * item.qty, 0);
   const gst = Math.round((subtotal * Number(CONFIG.GST_PERCENT || 5)) / 100);
-  const total = subtotal + gst;
-  return { subtotal, gst, total };
+  const deliveryCharge = getWebsiteDeliveryCharge(orderContext);
+  const total = subtotal + gst + deliveryCharge;
+  return { subtotal, gst, deliveryCharge, total };
+}
+
+function shouldApplyWebsiteDeliveryCharge(orderContext = getActiveOrderContext()) {
+  return !hasDineInOrderContext(getActiveOrderContext(orderContext));
+}
+
+function getConfiguredDeliveryCharge() {
+  const candidate = Number(window.APP_STATE?.theme?.payment?.deliveryCharge);
+  return Number.isFinite(candidate) && candidate > 0 ? candidate : 0;
+}
+
+function getWebsiteDeliveryCharge(orderContext = getActiveOrderContext()) {
+  return shouldApplyWebsiteDeliveryCharge(orderContext) ? getConfiguredDeliveryCharge() : 0;
 }
 
 function getUpiDiscountPercent() {
@@ -1990,7 +2037,7 @@ function formatDiscountPercent(percent) {
 }
 
 function calculatePayableAmounts(items = CART) {
-  const { subtotal, gst, total: normalTotal } = calculateCartTotals(items);
+  const { subtotal, gst, deliveryCharge, total: normalTotal } = calculateCartTotals(items);
   const upiDiscountPercent = getUpiDiscountPercent();
   const gpayDiscount = Math.round((normalTotal * upiDiscountPercent) / 100);
   const gpayFinalTotal = Math.max(0, normalTotal - gpayDiscount);
@@ -1998,6 +2045,7 @@ function calculatePayableAmounts(items = CART) {
   return {
     subtotal,
     gst,
+    deliveryCharge,
     normalTotal,
     upiDiscountPercent,
     gpayDiscount,
@@ -2069,7 +2117,7 @@ function buildOrderSummaryText({
   orderContext = getActiveOrderContext(),
 }) {
   const safeItems = normalizeCartItems(items);
-  const { subtotal, gst, normalTotal, upiDiscountPercent, gpayDiscount, gpayFinalTotal } =
+  const { subtotal, gst, deliveryCharge, normalTotal, upiDiscountPercent, gpayDiscount, gpayFinalTotal } =
     calculatePayableAmounts(safeItems);
 
   const isUpi = paymentMethod === "UPI";
@@ -2109,6 +2157,9 @@ function buildOrderSummaryText({
   lines.push("");
   lines.push(` Subtotal = ${formatCurrency(subtotal)}`);
   lines.push(` GST = ${formatCurrency(gst)}`);
+  if (deliveryCharge > 0) {
+    lines.push(` Delivery Charge = ${formatCurrency(deliveryCharge)}`);
+  }
 
   if (isUpi) {
     lines.push(` Original Total = ${formatCurrency(normalTotal)}`);
@@ -2365,13 +2416,15 @@ function updateCartUI() {
   const cartItemsWrap = $("#cartItems");
   const subtotalEl = $("#cartSubtotal");
   const gstEl = $("#cartGst");
+  const deliveryChargeRowEl = $("#cartDeliveryChargeRow");
+  const deliveryChargeEl = $("#cartDeliveryCharge");
   const totalEl = $("#cartTotal");
   const countEl = $("#cartCount");
   const floatingCountEl = $("#floatingCartCount");
   const previewEl = $("#orderPreview");
   const gstPercentLabel = $("#gstPercentLabel");
 
-  const { subtotal, gst, normalTotal, gpayDiscount, gpayFinalTotal } =
+  const { subtotal, gst, deliveryCharge, normalTotal, gpayDiscount, gpayFinalTotal } =
     calculatePayableAmounts();
 
   const selectedPaymentMethod =
@@ -2383,6 +2436,12 @@ function updateCartUI() {
   if (gstPercentLabel) gstPercentLabel.textContent = CONFIG.GST_PERCENT || 5;
   if (subtotalEl) subtotalEl.textContent = formatCurrency(subtotal);
   if (gstEl) gstEl.textContent = formatCurrency(gst);
+  if (deliveryChargeRowEl) {
+    deliveryChargeRowEl.hidden = !(deliveryCharge > 0);
+  }
+  if (deliveryChargeEl) {
+    deliveryChargeEl.textContent = formatCurrency(deliveryCharge);
+  }
   if (totalEl) {
     totalEl.textContent = formatCurrency(
       selectedPaymentMethod === "UPI" ? gpayFinalTotal : normalTotal,
@@ -2993,7 +3052,8 @@ function initMenuAndCart() {
     return {
       orderType: orderContext.orderType || "standard",
       tableNumber: orderContext.tableNumber || "",
-      orderSource: orderContext.orderSource || "website"
+      orderSource: orderContext.orderSource || "website",
+      qrContextToken: orderContext.qrContextToken || ""
     };
   }
 
@@ -3329,24 +3389,6 @@ function initMenuAndCart() {
       );
     }
 
-    const paidSummaryText = buildOrderSummaryText({
-      customerName,
-      customerPhone,
-      customerAddress,
-      customerTableNote: hasDineInOrderContext(orderContext)
-        ? document.getElementById("orderAddress")?.value.trim() || ""
-        : "",
-      locationLink: USER_LOCATION || "Permission denied",
-      paymentMethod,
-      note,
-      paymentConfirmed: true,
-      items: normalizedCart,
-      orderContext
-    });
-    const activeHotelWhatsappLink = cleanPhone(CONFIG.OWNER_WHATSAPP_NUMBER)
-      ? ownerWhatsAppLink(paidSummaryText)
-      : "";
-
     CART = [];
     saveCart();
     updateCartUI();
@@ -3354,6 +3396,7 @@ function initMenuAndCart() {
 
     if (checkoutForm) {
       checkoutForm.reset();
+      clearCheckoutAddressState(checkoutForm);
     }
 
     const codInput = document.querySelector('input[name="paymentMethod"][value="COD"]');
@@ -3361,7 +3404,6 @@ function initMenuAndCart() {
 
     closeCartDrawer();
     updatePaymentUI();
-    openWhatsAppSafely(activeHotelWhatsappLink || ownerWhatsAppLink(paidSummaryText));
     showOrderTrackingPrompt(
       initResult?.tracking,
       "Payment verified. Your live order tracking link is ready."
@@ -3369,7 +3411,7 @@ function initMenuAndCart() {
     showToast(
       initResult?.trackingReady
         ? "Payment verified. Tracking link is ready."
-        : "Payment verified and order sent to WhatsApp."
+        : "Payment verified. Your order was saved successfully."
     );
   }
 
@@ -4144,7 +4186,8 @@ async function handleCheckoutSubmit(e) {
     ? {
         orderType: orderContext.orderType,
         tableNumber: orderContext.tableNumber,
-        orderSource: orderContext.orderSource
+        orderSource: orderContext.orderSource,
+        qrContextToken: orderContext.qrContextToken || ""
       }
     : undefined;
   const endpoint = isAddonOrder
@@ -4206,6 +4249,7 @@ async function handleCheckoutSubmit(e) {
 
   // Reset form
   e.target.reset();
+  clearCheckoutAddressState(e.target);
   const codInput = document.querySelector('input[name="paymentMethod"][value="COD"]');
   if (codInput) codInput.checked = true;
 
@@ -5031,6 +5075,10 @@ function buildHotelAwareHref(rawHref, hotelSlug) {
       url.searchParams.set("source", orderContextParams.orderSource);
     }
 
+    if (orderContextParams.qrContextToken && !url.searchParams.has("qctx")) {
+      url.searchParams.set("qctx", orderContextParams.qrContextToken);
+    }
+
     const search = url.searchParams.toString();
 
     return `${basePath}${search ? `?${search}` : ""}${url.hash || ""}`;
@@ -5051,10 +5099,16 @@ function getCurrentOrderContextLinkParams() {
     params.get("source") ||
     activeOrderContext.orderSource ||
     (tableNumber ? "qr" : "");
+  const qrContextToken =
+    params.get("qctx") ||
+    params.get("qrContextToken") ||
+    activeOrderContext.qrContextToken ||
+    "";
 
   return {
     tableNumber: normalizeOrderContextText(tableNumber, 80),
-    orderSource: normalizeOrderContextText(orderSource, 40)
+    orderSource: normalizeOrderContextText(orderSource, 40),
+    qrContextToken: normalizeOrderContextText(qrContextToken, 2000)
   };
 }
 
@@ -5083,6 +5137,7 @@ function markAppReady() {
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
+    const isMenuPage = document.body.classList.contains("menu-page");
     const queryHotelSlug =
       typeof getHotelSlugFromQuery === "function" ? getHotelSlugFromQuery() : "";
 
@@ -5090,7 +5145,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       updateHotelAwareLinks(queryHotelSlug);
     }
 
-    await loadAppData();
+    await loadAppData({
+      includeGallery: !isMenuPage,
+      includeTestimonials: !isMenuPage
+    });
     applyLoadingScreenFromState();
     applyThemeFromState();
     applyHotelConfigFromState();

@@ -48,8 +48,53 @@ const STAFF_ORDER_STATUS_LABELS = {
   completed: "Completed / Served",
   cancelled: "Cancelled"
 };
+const STAFF_VIEW_META = {
+  dashboard: {
+    badge: "Dashboard",
+    title: "Dashboard overview",
+    description:
+      "Start from the hotel snapshot, then move into live orders, guest communication, and operational follow-up without leaving this workspace."
+  },
+  orders: {
+    badge: "Orders",
+    title: "Orders and billing workspace",
+    description:
+      "Review live QR and website orders, billing actions, payment state, and the current working queue for this hotel."
+  },
+  support: {
+    badge: "Support",
+    title: "Table support workspace",
+    description:
+      "Handle bill requests and staff-help calls from QR/table tracking without opening the full admin area."
+  },
+  reservations: {
+    badge: "Reservations",
+    title: "Reservations workspace",
+    description:
+      "Check booking requests, guest timing, table planning, and reservation follow-up for this hotel."
+  },
+  inquiries: {
+    badge: "Inquiries",
+    title: "Inquiries workspace",
+    description:
+      "Follow guest event leads, contact details, and status updates from one focused section."
+  },
+  contacts: {
+    badge: "Contacts",
+    title: "Contact messages workspace",
+    description:
+      "Review website contact messages, subjects, and follow-up status for this hotel only."
+  },
+  testimonials: {
+    badge: "Testimonials",
+    title: "Testimonials workspace",
+    description:
+      "Approve or pause hotel-specific guest reviews in a simple moderation flow."
+  }
+};
 let staffAutoRefreshTimer = null;
 let staffAutoRefreshInFlight = false;
+let staffCompactViewport = window.innerWidth <= 1080;
 
 function $(selector) {
   return document.querySelector(selector);
@@ -110,6 +155,60 @@ function setStaffSectionLastUpdated(selector, message = "") {
   if (!element) return;
 
   element.textContent = message || "Not refreshed yet";
+}
+
+function getStaffViewMeta(view = "dashboard") {
+  return STAFF_VIEW_META[view] || STAFF_VIEW_META.dashboard;
+}
+
+function updateStaffWorkspaceContext(view = "dashboard") {
+  const meta = getStaffViewMeta(view);
+  const title = $("#staffWorkspaceTitle");
+  const badge = $("#staffWorkspaceViewBadge");
+  const description = $("#staffWorkspaceDescription");
+
+  if (title) title.textContent = meta.title;
+  if (badge) badge.textContent = meta.badge;
+  if (description) description.textContent = meta.description;
+}
+
+function updateStaffWorkspaceHotelBadge(staffUser = STAFF_STATE.staffUser || {}) {
+  const badge = $("#staffWorkspaceHotelBadge");
+  if (!badge) return;
+
+  badge.textContent = `Hotel: ${staffUser?.hotelSlug || "this hotel"}`;
+}
+
+function isStaffCompactViewport() {
+  return window.innerWidth <= 1080;
+}
+
+function setStaffSidebarExpanded(isExpanded = true) {
+  const dashboardWrap = $("#staffDashboardWrap");
+  const toggleButton = $("#staffSidebarToggleBtn");
+  const expanded = !isStaffCompactViewport() ? true : !!isExpanded;
+
+  if (dashboardWrap) {
+    dashboardWrap.classList.toggle("is-sidebar-collapsed", !expanded);
+  }
+
+  if (toggleButton) {
+    toggleButton.setAttribute("aria-expanded", String(expanded));
+    toggleButton.textContent = expanded ? "Hide sections" : "Show sections";
+  }
+}
+
+function syncStaffSidebarForViewport() {
+  staffCompactViewport = isStaffCompactViewport();
+  setStaffSidebarExpanded(!staffCompactViewport);
+}
+
+function handleStaffViewportChange() {
+  const isCompact = isStaffCompactViewport();
+  if (isCompact === staffCompactViewport) return;
+
+  staffCompactViewport = isCompact;
+  setStaffSidebarExpanded(!isCompact);
 }
 
 function escapeHTML(value = "") {
@@ -545,7 +644,10 @@ function buildStaffSummaryCard(label, value, note, className = "") {
   `;
 }
 
-function setStaffDashboardSummaryEmpty(message = "No orders found for this hotel in the selected range.") {
+function setStaffDashboardSummaryEmpty(
+  message = "No orders found for this hotel in the selected range.",
+  isLoading = false
+) {
   const summaryWrap = $("#staffDashboardSummary");
   const reportsCopy = $("#staffDashboardReportsCopy");
   const reportsWrap = $("#staffDashboardReports");
@@ -575,6 +677,7 @@ function setStaffDashboardSummaryEmpty(message = "No orders found for this hotel
   if (empty) {
     empty.hidden = false;
     empty.textContent = message;
+    empty.classList.toggle("is-loading", !!isLoading);
   }
 }
 
@@ -1431,6 +1534,7 @@ function buildStaffBillTotalsRows(order = {}) {
   const rows = [];
   const subtotal = getNumberValue(totals.subtotal);
   const gst = getNumberValue(totals.gst);
+  const deliveryCharge = getNumberValue(totals.deliveryCharge);
   const normalTotal = getNumberValue(totals.normalTotal);
   const upiDiscountPercent = getNumberValue(totals.upiDiscountPercent);
   const gpayDiscount = getNumberValue(totals.gpayDiscount);
@@ -1442,6 +1546,12 @@ function buildStaffBillTotalsRows(order = {}) {
 
   if (gst !== null) {
     rows.push(`<tr><th>GST</th><td>${escapeHTML(formatMoney(gst))}</td></tr>`);
+  }
+
+  if (deliveryCharge !== null && deliveryCharge > 0) {
+    rows.push(
+      `<tr><th>Delivery Charge</th><td>${escapeHTML(formatMoney(deliveryCharge))}</td></tr>`
+    );
   }
 
   if (normalTotal !== null) {
@@ -1889,11 +1999,13 @@ function buildStaffOrdersListMarkup(orders = []) {
   ].join("");
 }
 
-function setStaffRecordsLoading(selector, message) {
+function setStaffRecordsLoading(selector, message, isLoading = true) {
   const content = $(selector);
   if (!content) return;
 
-  content.className = "staff-empty";
+  content.className = isLoading
+    ? "staff-empty staff-section-stage is-loading"
+    : "staff-empty staff-section-stage";
   content.textContent = message;
 }
 
@@ -2028,12 +2140,47 @@ function buildStaffContactCard(contactSubmission = {}) {
   `;
 }
 
+function getStaffSupportRequestOrderContext(supportRequest = {}) {
+  const orderId = String(supportRequest.orderId || "").trim();
+  if (!orderId) return null;
+
+  const order = findStaffOrder(orderId);
+  if (!order) return null;
+
+  const paymentStatus = normalizeStatus(order.paymentStatus);
+  const billingStatus = normalizeStatus(order.billingStatus);
+  const billNumber = String(order.billNumber || "").trim();
+  const customerBillReady =
+    Boolean(billNumber) ||
+    ["billed", "closed"].includes(billingStatus) ||
+    paymentStatus === "paid";
+
+  return {
+    order,
+    paymentStatus,
+    billingStatus,
+    billNumber,
+    customerBillReady
+  };
+}
+
 function buildStaffSupportRequestCard(supportRequest = {}) {
   const status = supportRequest.status || "new";
   const statusBadgeClass = getStaffRecordStatusBadgeClass(status, "support");
   const requestType = normalizeStatus(supportRequest.requestType);
   const requestLabel = requestType === "bill" ? "Bill request" : "Staff help";
   const isNewSupportRequest = normalizeStatus(status) === "new";
+  const orderContext = getStaffSupportRequestOrderContext(supportRequest);
+  const paymentBadgeClass = orderContext?.paymentStatus === "paid" ? "is-success" : "is-warning";
+  const billingBadgeClass =
+    orderContext && ["billed", "closed"].includes(orderContext.billingStatus)
+      ? "is-success"
+      : "is-warning";
+  const trackingNote = requestType !== "bill" || !orderContext
+    ? ""
+    : orderContext.customerBillReady
+      ? `Customer bill is now visible on tracking${orderContext.billNumber ? ` as ${orderContext.billNumber}` : ""}.`
+      : "Customer bill is not visible on tracking yet. Mark billed or paid when the bill is ready.";
 
   return `
     <article class="staff-order-card ${isNewSupportRequest ? "is-new-support" : ""}">
@@ -2047,6 +2194,9 @@ function buildStaffSupportRequestCard(supportRequest = {}) {
         <span class="staff-badge is-important">${escapeHTML(requestLabel)}</span>
         <span class="staff-badge">Order #${escapeHTML(supportRequest.orderId || "Not linked")}</span>
         <span class="staff-badge">Table: ${escapeHTML(supportRequest.tableNumber || "Not provided")}</span>
+        ${orderContext ? `<span class="staff-badge ${paymentBadgeClass}">Payment: ${escapeHTML(getStaffRecordStatusLabel(orderContext.paymentStatus || "pending"))}</span>` : ""}
+        ${orderContext ? `<span class="staff-badge ${billingBadgeClass}">Billing: ${escapeHTML(getStaffRecordStatusLabel(orderContext.billingStatus || "not_billed"))}</span>` : ""}
+        ${orderContext?.billNumber ? `<span class="staff-badge is-success">Bill: ${escapeHTML(orderContext.billNumber)}</span>` : ""}
         <span class="staff-badge ${statusBadgeClass}">Status: ${escapeHTML(status)}</span>
       </div>
 
@@ -2057,6 +2207,7 @@ function buildStaffSupportRequestCard(supportRequest = {}) {
       </div>
 
       <p class="staff-order-note"><strong>Message:</strong> ${escapeHTML(supportRequest.message || "No message")}</p>
+      ${trackingNote ? `<p class="staff-order-note"><strong>Tracking:</strong> ${escapeHTML(trackingNote)}</p>` : ""}
       ${buildStaffRecordStatusControls("support", supportRequest, STAFF_SUPPORT_STATUS_OPTIONS)}
     </article>
   `;
@@ -2111,12 +2262,12 @@ function renderStaffRecordList(selector, records = [], buildCard, emptyMessage =
   if (!content) return;
 
   if (!records.length) {
-    content.className = "staff-empty";
+    content.className = "staff-empty staff-section-stage";
     content.textContent = emptyMessage;
     return;
   }
 
-  content.className = "staff-orders-list";
+  content.className = "staff-orders-list staff-section-stage";
   content.innerHTML = records.map(buildCard).join("");
 }
 
@@ -2129,25 +2280,25 @@ function renderStaffOrders(orders = []) {
   renderStaffFilterStatus(orders);
 
   if (!orders.length) {
-    content.className = "staff-empty";
+    content.className = "staff-empty staff-section-stage";
     content.innerHTML = getStaffEmptyOrdersMessage();
     return;
   }
 
-  content.className = "staff-orders-list";
+  content.className = "staff-orders-list staff-section-stage";
   content.innerHTML = buildStaffOrdersListMarkup(orders);
 }
 
 function setStaffOrdersLoading(message = "Loading staff orders...") {
   const content = $("#staffOrdersContent");
-  setStaffDashboardSummaryEmpty("Loading dashboard summary...");
+  setStaffDashboardSummaryEmpty("Loading dashboard summary...", true);
   renderStaffOrdersQuickReports(null);
   renderStaffOrdersAttentionSummary([]);
   setStaffSectionLastUpdated("#staffDashboardLastUpdated", "Refreshing dashboard...");
   clearStaffFilterStatus();
   if (!content) return;
 
-  content.className = "staff-empty";
+  content.className = "staff-empty staff-section-stage is-loading";
   content.textContent = message;
 }
 
@@ -2159,6 +2310,7 @@ function showStaffLoginView(message = "") {
   resetStaffDashboardState();
   if (loginWrap) loginWrap.style.display = "grid";
   if (dashboardWrap) dashboardWrap.style.display = "none";
+  syncStaffSidebarForViewport();
 
   if (message) {
     setStaffLoginStatus(message);
@@ -2174,6 +2326,9 @@ function showStaffDashboardView(staffUser = {}) {
   if (loginWrap) loginWrap.style.display = "none";
   if (dashboardWrap) dashboardWrap.style.display = "grid";
   if (hotelLabel) hotelLabel.textContent = staffUser.hotelSlug || "this hotel";
+  updateStaffWorkspaceHotelBadge(staffUser);
+  updateStaffWorkspaceContext(STAFF_STATE.activeView || "dashboard");
+  syncStaffSidebarForViewport();
 }
 
 function showStaffView(view = "dashboard") {
@@ -2190,6 +2345,8 @@ function showStaffView(view = "dashboard") {
   document.querySelectorAll("[data-staff-view-panel]").forEach((panel) => {
     panel.hidden = panel.dataset.staffViewPanel !== nextView;
   });
+
+  updateStaffWorkspaceContext(nextView);
 }
 
 function clearStaffFreshDataIndicator(view = "") {
@@ -2211,6 +2368,9 @@ function markStaffFreshData(view = "") {
 function openStaffView(view = "dashboard") {
   showStaffView(view);
   clearStaffFreshDataIndicator(view);
+  if (isStaffCompactViewport()) {
+    setStaffSidebarExpanded(false);
+  }
 
   if (view === "reservations" && !STAFF_STATE.reservationsLoaded) {
     void loadStaffReservations();
@@ -2441,7 +2601,8 @@ async function loadStaffReservations() {
     clearStaffRecordSummary("#staffReservationsSummary");
     setStaffRecordsLoading(
       "#staffReservationsContent",
-      error.message || "Failed to load staff reservations."
+      error.message || "Failed to load staff reservations.",
+      false
     );
   }
 }
@@ -2463,7 +2624,8 @@ async function loadStaffInquiries() {
     clearStaffRecordSummary("#staffInquiriesSummary");
     setStaffRecordsLoading(
       "#staffInquiriesContent",
-      error.message || "Failed to load staff inquiries."
+      error.message || "Failed to load staff inquiries.",
+      false
     );
   }
 }
@@ -2487,7 +2649,8 @@ async function loadStaffContacts() {
     clearStaffRecordSummary("#staffContactsSummary");
     setStaffRecordsLoading(
       "#staffContactsContent",
-      error.message || "Failed to load staff contact messages."
+      error.message || "Failed to load staff contact messages.",
+      false
     );
   }
 }
@@ -2529,7 +2692,8 @@ async function loadStaffSupportRequests({ silent = false } = {}) {
       clearStaffRecordSummary("#staffSupportSummary");
       setStaffRecordsLoading(
         "#staffSupportContent",
-        error.message || "Failed to load staff support requests."
+        error.message || "Failed to load staff support requests.",
+        false
       );
     } else {
       throw error;
@@ -2554,7 +2718,8 @@ async function loadStaffTestimonials() {
     clearStaffRecordSummary("#staffTestimonialsSummary");
     setStaffRecordsLoading(
       "#staffTestimonialsContent",
-      error.message || "Failed to load staff testimonials."
+      error.message || "Failed to load staff testimonials.",
+      false
     );
   }
 }
@@ -2900,6 +3065,7 @@ function bindStaffLogout() {
 }
 
 function bindStaffOrderActions() {
+  const sidebarToggleButton = $("#staffSidebarToggleBtn");
   const refreshButton = $("#staffRefreshOrdersBtn");
   const rangeInput = $("#staffOrdersRangeInput");
   const ordersSearchInput = $("#staffOrdersSearchInput");
@@ -2925,6 +3091,14 @@ function bindStaffOrderActions() {
   const testimonialsRefreshButton = $("#staffRefreshTestimonialsBtn");
   const testimonialsRangeInput = $("#staffTestimonialsRangeInput");
   const testimonialsApprovalInput = $("#staffTestimonialsApprovalInput");
+
+  if (sidebarToggleButton) {
+    sidebarToggleButton.addEventListener("click", () => {
+      const dashboardWrap = $("#staffDashboardWrap");
+      const isCollapsed = dashboardWrap?.classList.contains("is-sidebar-collapsed");
+      setStaffSidebarExpanded(!!isCollapsed);
+    });
+  }
 
   if (refreshButton) {
     refreshButton.addEventListener("click", () => {
@@ -3159,8 +3333,10 @@ async function initStaffOrdersPage() {
   bindStaffLoginForm();
   bindStaffLogout();
   bindStaffOrderActions();
+  syncStaffSidebarForViewport();
   await checkExistingStaffSession();
 }
 
 window.addEventListener("beforeunload", stopStaffAutoRefresh);
+window.addEventListener("resize", handleStaffViewportChange);
 document.addEventListener("DOMContentLoaded", initStaffOrdersPage);

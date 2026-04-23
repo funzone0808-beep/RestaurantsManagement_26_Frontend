@@ -89,7 +89,7 @@ mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent 82%);
 .staff-wrap {
 position: relative;
 z-index: 1;
-width: min(1120px, calc(100% - 32px));
+width: min(1520px, calc(100% - 24px));
 margin: 0 auto;
 padding: 36px 0 42px;
 }
@@ -358,6 +358,100 @@ font-size: 22px;
 letter-spacing: -0.02em;
 }
 
+.staff-dashboard-layout {
+display: grid;
+grid-template-columns: 290px minmax(0, 1fr);
+gap: 22px;
+align-items: start;
+}
+
+.staff-dashboard-sidebar {
+position: sticky;
+top: 24px;
+display: grid;
+gap: 18px;
+padding: 20px;
+border: 1px solid rgba(133, 86, 49, 0.14);
+border-radius: 28px;
+background:
+linear-gradient(180deg, rgba(255, 252, 247, 0.78), rgba(244, 233, 219, 0.88)),
+rgba(255, 248, 241, 0.82);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.88),
+0 22px 46px rgba(115, 77, 46, 0.12);
+backdrop-filter: blur(16px);
+-webkit-backdrop-filter: blur(16px);
+}
+
+.staff-sidebar-brand,
+.staff-sidebar-note {
+display: grid;
+gap: 10px;
+padding: 18px;
+border: 1px solid rgba(133, 86, 49, 0.12);
+border-radius: 22px;
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(247, 238, 228, 0.84));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.82),
+0 14px 28px rgba(115, 77, 46, 0.08);
+}
+
+.staff-sidebar-title {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: 24px;
+letter-spacing: -0.03em;
+}
+
+.staff-sidebar-copy {
+margin: 0;
+color: var(--staff-muted);
+font-size: 13px;
+line-height: 1.68;
+}
+
+.staff-sidebar-header {
+display: flex;
+justify-content: space-between;
+gap: 12px;
+align-items: center;
+}
+
+.staff-sidebar-heading {
+display: grid;
+gap: 6px;
+}
+
+.staff-sidebar-heading .staff-kicker {
+margin: 0;
+}
+
+.staff-sidebar-section-count {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+min-width: 38px;
+height: 38px;
+padding: 0 12px;
+border-radius: 999px;
+border: 1px solid rgba(133, 86, 49, 0.12);
+color: var(--staff-text-strong);
+background:
+linear-gradient(180deg, rgba(255, 251, 246, 0.92), rgba(246, 236, 224, 0.96));
+font-size: 13px;
+font-weight: 900;
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.84),
+0 12px 22px rgba(115, 77, 46, 0.06);
+}
+
+.staff-dashboard-main {
+display: grid;
+gap: 18px;
+min-width: 0;
+}
+
 .staff-view-tabs {
 display: flex;
 flex-wrap: wrap;
@@ -468,6 +562,52 @@ background: rgba(255, 245, 233, 0.86);
 border-color: rgba(255, 255, 255, 0.18);
 }
 
+.staff-dashboard-sidebar .staff-view-tabs {
+display: grid;
+gap: 8px;
+padding: 8px;
+border-radius: 22px;
+}
+
+.staff-dashboard-sidebar .staff-view-tab {
+position: relative;
+width: 100%;
+justify-content: space-between;
+text-align: left;
+padding: 12px 14px;
+overflow: hidden;
+}
+
+.staff-dashboard-sidebar .staff-view-tab::before {
+content: "";
+position: absolute;
+inset: 10px auto 10px 0;
+width: 4px;
+border-radius: 999px;
+background:
+linear-gradient(180deg, rgba(201, 152, 79, 0.84), rgba(191, 116, 76, 0.78), rgba(132, 72, 90, 0.74));
+opacity: 0;
+transform: scaleY(0.45);
+transform-origin: center;
+transition:
+opacity 160ms ease,
+transform 160ms ease;
+}
+
+.staff-dashboard-sidebar .staff-view-tab.is-active::before,
+.staff-dashboard-sidebar .staff-view-tab.has-fresh-data::before {
+opacity: 1;
+transform: scaleY(1);
+}
+
+.staff-dashboard-sidebar .staff-view-tab-count {
+margin-left: auto;
+}
+
+.staff-sidebar-toggle-btn {
+display: none;
+}
+
 .staff-view-panel {
 display: grid;
 gap: 16px;
@@ -479,40 +619,23 @@ display: none;
 
 .staff-dashboard-shell {
 position: relative;
-overflow: hidden;
+overflow: visible;
 gap: 22px;
-padding: clamp(20px, 3vw, 30px);
-border-radius: 32px;
-border: 1px solid rgba(133, 86, 49, 0.12);
-background:
-radial-gradient(circle at top right, rgba(201, 152, 79, 0.18), transparent 22rem),
-radial-gradient(circle at bottom left, rgba(125, 143, 99, 0.12), transparent 24rem),
-linear-gradient(145deg, rgba(255, 252, 247, 0.72), rgba(247, 239, 230, 0.84));
-backdrop-filter: blur(18px);
--webkit-backdrop-filter: blur(18px);
-box-shadow: var(--staff-shadow-strong);
+padding: 0;
+border-radius: 0;
+border: 0;
+background: transparent;
+backdrop-filter: none;
+-webkit-backdrop-filter: none;
+box-shadow: none;
 }
 
 .staff-dashboard-shell::before {
-content: "";
-position: absolute;
-inset: 0;
-pointer-events: none;
-background:
-linear-gradient(90deg, rgba(255, 255, 255, 0.16) 1px, transparent 1px),
-linear-gradient(180deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
-background-size: 48px 48px;
-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.45), transparent 80%);
+content: none;
 }
 
 .staff-dashboard-shell::after {
-content: "";
-position: absolute;
-inset: 0;
-pointer-events: none;
-background:
-linear-gradient(135deg, rgba(255, 255, 255, 0.42), transparent 28%),
-radial-gradient(circle at 85% 15%, rgba(139, 67, 88, 0.08), transparent 10rem);
+content: none;
 }
 
 .staff-dashboard-shell > * {
@@ -520,7 +643,60 @@ position: relative;
 z-index: 1;
 }
 
+.staff-workspace-topbar {
+display: flex;
+justify-content: space-between;
+gap: 18px;
+align-items: center;
+padding: 18px 20px;
+border: 1px solid rgba(133, 86, 49, 0.10);
+border-radius: 24px;
+background:
+linear-gradient(180deg, rgba(255, 251, 246, 0.84), rgba(246, 237, 227, 0.90));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.82),
+0 16px 34px rgba(115, 77, 46, 0.08);
+}
+
+.staff-workspace-context {
+display: grid;
+gap: 8px;
+min-width: 0;
+}
+
+.staff-workspace-title-row {
+display: flex;
+flex-wrap: wrap;
+gap: 10px;
+align-items: center;
+}
+
+.staff-workspace-title {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: clamp(20px, 2.6vw, 28px);
+line-height: 1.1;
+letter-spacing: -0.02em;
+}
+
+.staff-workspace-copy {
+margin: 0;
+max-width: 760px;
+color: var(--staff-muted);
+line-height: 1.62;
+font-size: 14px;
+}
+
+.staff-workspace-actions {
+display: flex;
+flex-wrap: wrap;
+gap: 10px;
+align-items: center;
+justify-content: flex-end;
+}
+
 .staff-dashboard-hero {
+position: relative;
 display: flex;
 justify-content: space-between;
 gap: 18px;
@@ -534,6 +710,34 @@ rgba(255, 248, 241, 0.78);
 box-shadow:
 inset 0 1px 0 rgba(255, 255, 255, 0.85),
 0 20px 44px rgba(115, 77, 46, 0.10);
+overflow: hidden;
+}
+
+.staff-dashboard-hero::before {
+content: "";
+position: absolute;
+inset: 0;
+pointer-events: none;
+background:
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.24), transparent 14rem),
+linear-gradient(135deg, rgba(255, 255, 255, 0.30), transparent 32%);
+}
+
+.staff-dashboard-hero::after {
+content: "";
+position: absolute;
+top: 0;
+left: 22px;
+right: 22px;
+height: 3px;
+border-radius: 999px;
+background:
+linear-gradient(90deg, rgba(201, 152, 79, 0.94), rgba(191, 116, 76, 0.88), rgba(132, 72, 90, 0.84));
+}
+
+.staff-dashboard-hero > * {
+position: relative;
+z-index: 1;
 }
 
 .staff-dashboard-title {
@@ -547,6 +751,7 @@ letter-spacing: -0.03em;
 .staff-dashboard-copy {
 max-width: 720px;
 margin-top: 10px;
+line-height: 1.68;
 }
 
 .staff-dashboard-top-actions {
@@ -618,11 +823,11 @@ gap: 14px;
 .staff-dashboard-shortcut {
 position: relative;
 display: grid;
-gap: 10px;
-min-height: 160px;
+gap: 12px;
+min-height: 172px;
 border: 1px solid rgba(133, 86, 49, 0.14);
 border-radius: 24px;
-padding: 20px;
+padding: 22px;
 color: var(--staff-text);
 text-align: left;
 background:
@@ -648,6 +853,19 @@ pointer-events: none;
 background:
 radial-gradient(circle at top right, rgba(201, 152, 79, 0.18), transparent 11rem),
 linear-gradient(135deg, rgba(255, 255, 255, 0.26), transparent 30%);
+}
+
+.staff-dashboard-shortcut::after {
+content: "";
+position: absolute;
+top: 0;
+left: 18px;
+right: 18px;
+height: 3px;
+border-radius: 999px;
+background:
+linear-gradient(90deg, rgba(201, 152, 79, 0.90), rgba(191, 116, 76, 0.84), rgba(132, 72, 90, 0.80));
+opacity: 0.84;
 }
 
 .staff-dashboard-shortcut:nth-child(2)::before {
@@ -688,6 +906,7 @@ margin: 0;
 color: var(--staff-text-strong);
 font-size: 21px;
 letter-spacing: -0.02em;
+line-height: 1.08;
 }
 
 .staff-dashboard-shortcut-copy {
@@ -695,15 +914,39 @@ margin: 0;
 color: var(--staff-muted);
 font-size: 13px;
 line-height: 1.62;
+max-width: 30ch;
 }
 
 .staff-dashboard-shortcut-action {
+display: inline-flex;
+align-items: center;
+gap: 8px;
+width: fit-content;
+padding: 8px 12px;
+border-radius: 999px;
+border: 1px solid rgba(139, 67, 88, 0.12);
 color: var(--staff-plum);
 font-size: 13px;
 font-weight: 900;
+background:
+linear-gradient(180deg, rgba(255, 250, 246, 0.86), rgba(247, 237, 230, 0.92));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.84),
+0 10px 18px rgba(115, 77, 46, 0.06);
+transition:
+transform 160ms ease,
+box-shadow 160ms ease;
+}
+
+.staff-dashboard-shortcut:hover .staff-dashboard-shortcut-action {
+transform: translateX(4px);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.88),
+0 14px 22px rgba(115, 77, 46, 0.08);
 }
 
 .staff-section-head {
+position: relative;
 display: flex;
 flex-wrap: wrap;
 gap: 12px;
@@ -717,6 +960,23 @@ linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(247, 238, 228, 0.84));
 box-shadow:
 inset 0 1px 0 rgba(255, 255, 255, 0.82),
 0 14px 30px rgba(115, 77, 46, 0.08);
+overflow: hidden;
+}
+
+.staff-section-head::before {
+content: "";
+position: absolute;
+inset: 16px auto 16px 0;
+width: 4px;
+border-radius: 999px;
+background:
+linear-gradient(180deg, rgba(201, 152, 79, 0.95), rgba(185, 111, 75, 0.92), rgba(132, 72, 90, 0.92));
+box-shadow: 0 0 18px rgba(191, 116, 76, 0.18);
+}
+
+.staff-section-head > * {
+position: relative;
+z-index: 1;
 }
 
 .staff-section-head h3 {
@@ -757,6 +1017,25 @@ gap: 8px;
 justify-items: end;
 }
 
+.staff-section-toolbar {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+gap: 12px;
+align-items: center;
+padding: 16px;
+border: 1px solid rgba(133, 86, 49, 0.12);
+border-radius: 22px;
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(246, 236, 224, 0.82));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.82),
+0 14px 28px rgba(115, 77, 46, 0.07);
+}
+
+.staff-section-toolbar .staff-orders-search {
+grid-column: span 2;
+}
+
 .staff-section-refresh-time {
 margin: 0;
 color: var(--staff-muted);
@@ -766,6 +1045,7 @@ letter-spacing: 0.04em;
 }
 
 .staff-empty {
+position: relative;
 margin: 0;
 padding: 18px;
 border: 1px dashed rgba(133, 86, 49, 0.20);
@@ -774,6 +1054,95 @@ color: var(--staff-muted);
 background:
 linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(248, 239, 229, 0.72));
 line-height: 1.7;
+display: grid;
+gap: 10px;
+align-content: center;
+min-height: 126px;
+overflow: hidden;
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.82),
+0 12px 24px rgba(115, 77, 46, 0.05);
+}
+
+.staff-empty::before {
+content: "";
+width: 42px;
+height: 42px;
+border-radius: 16px;
+background:
+radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.20)),
+linear-gradient(135deg, rgba(201, 152, 79, 0.18), rgba(191, 116, 76, 0.16), rgba(132, 72, 90, 0.14));
+border: 1px solid rgba(133, 86, 49, 0.10);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.86),
+0 10px 20px rgba(115, 77, 46, 0.06);
+}
+
+.staff-empty.is-loading {
+border-style: solid;
+border-color: rgba(201, 152, 79, 0.18);
+background:
+linear-gradient(180deg, rgba(255, 253, 249, 0.84), rgba(247, 238, 228, 0.92));
+animation: staffLoadingPulse 1.6s ease-in-out infinite;
+}
+
+.staff-empty.is-loading::before {
+background:
+radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.28)),
+linear-gradient(135deg, rgba(201, 152, 79, 0.26), rgba(191, 116, 76, 0.22), rgba(132, 72, 90, 0.18));
+}
+
+.staff-empty.is-loading::after {
+content: "";
+position: absolute;
+inset: 0;
+pointer-events: none;
+background:
+linear-gradient(110deg, transparent 0%, rgba(255, 255, 255, 0.52) 46%, transparent 100%);
+transform: translateX(-100%);
+animation: staffLoadingSweep 1.4s ease-in-out infinite;
+}
+
+@keyframes staffLoadingPulse {
+0%,
+100% {
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.82),
+0 12px 24px rgba(115, 77, 46, 0.05);
+}
+
+50% {
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.90),
+0 18px 28px rgba(201, 152, 79, 0.10);
+}
+}
+
+@keyframes staffLoadingSweep {
+0% {
+transform: translateX(-100%);
+}
+
+100% {
+transform: translateX(100%);
+}
+}
+
+.staff-section-stage {
+position: relative;
+padding: 18px;
+border: 1px solid rgba(133, 86, 49, 0.12);
+border-radius: 24px;
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(246, 237, 227, 0.82));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.84),
+0 18px 36px rgba(115, 77, 46, 0.08);
+}
+
+.staff-section-stage.staff-orders-list {
+display: grid;
+gap: 14px;
 }
 
 .staff-summary-grid {
@@ -793,9 +1162,9 @@ grid-template-columns: repeat(3, minmax(0, 1fr));
 .staff-summary-card {
 position: relative;
 display: grid;
-gap: 8px;
+gap: 10px;
 min-height: 128px;
-padding: 18px;
+padding: 20px;
 border: 1px solid rgba(133, 86, 49, 0.14);
 border-radius: 22px;
 background:
@@ -805,6 +1174,11 @@ box-shadow:
 inset 0 1px 0 rgba(255, 255, 255, 0.84),
 0 18px 36px rgba(115, 77, 46, 0.08);
 overflow: hidden;
+transition:
+transform 180ms ease,
+box-shadow 180ms ease,
+border-color 180ms ease,
+background 180ms ease;
 }
 
 .staff-summary-card::before {
@@ -815,6 +1189,19 @@ pointer-events: none;
 background:
 linear-gradient(135deg, rgba(255, 255, 255, 0.34), transparent 36%),
 radial-gradient(circle at top right, rgba(201, 152, 79, 0.12), transparent 10rem);
+}
+
+.staff-summary-card::after {
+content: "";
+position: absolute;
+top: 0;
+left: 18px;
+right: 18px;
+height: 3px;
+border-radius: 999px;
+background:
+linear-gradient(90deg, rgba(201, 152, 79, 0.92), rgba(191, 116, 76, 0.84), rgba(132, 72, 90, 0.78));
+opacity: 0.88;
 }
 
 .staff-summary-card:nth-child(2)::before {
@@ -838,6 +1225,13 @@ radial-gradient(circle at top right, rgba(139, 67, 88, 0.12), transparent 10rem)
 .staff-summary-card > * {
 position: relative;
 z-index: 1;
+}
+
+.staff-summary-card:hover {
+transform: translateY(-3px);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.90),
+0 24px 44px rgba(115, 77, 46, 0.12);
 }
 
 .staff-orders-reports .staff-summary-card {
@@ -893,15 +1287,23 @@ font-size: 11px;
 font-weight: 900;
 letter-spacing: 0.12em;
 text-transform: uppercase;
+display: inline-flex;
+width: fit-content;
+padding: 7px 10px;
+border-radius: 999px;
+background: rgba(255, 249, 242, 0.80);
+border: 1px solid rgba(133, 86, 49, 0.10);
+box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
 .staff-summary-value {
 margin: 0;
 color: var(--staff-text-strong);
 font-size: clamp(28px, 3vw, 34px);
-font-weight: 900;
+font-weight: 600;
 letter-spacing: -0.04em;
 line-height: 1;
+text-shadow: 0 10px 24px rgba(115, 77, 46, 0.08);
 }
 
 .staff-summary-note {
@@ -909,19 +1311,22 @@ margin: 0;
 color: var(--staff-muted);
 font-size: 13px;
 line-height: 1.48;
+max-width: 34ch;
 }
 
 .staff-filter-status {
 margin: 0;
-padding: 13px 15px;
+padding: 14px 16px;
 border: 1px solid rgba(133, 86, 49, 0.12);
-border-radius: 16px;
+border-radius: 18px;
 color: var(--staff-muted);
 background:
 linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(247, 238, 228, 0.74));
 font-size: 13px;
 line-height: 1.55;
-box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.82),
+0 12px 24px rgba(115, 77, 46, 0.06);
 }
 
 .staff-orders-list {
@@ -930,9 +1335,10 @@ gap: 14px;
 }
 
 .staff-order-group {
+position: relative;
 display: grid;
 gap: 12px;
-padding: 16px;
+padding: 18px;
 border: 1px solid rgba(133, 86, 49, 0.14);
 border-radius: 22px;
 background:
@@ -940,6 +1346,31 @@ linear-gradient(180deg, rgba(255, 255, 255, 0.60), rgba(247, 238, 228, 0.80));
 box-shadow:
 inset 0 1px 0 rgba(255, 255, 255, 0.84),
 0 18px 38px rgba(115, 77, 46, 0.08);
+overflow: hidden;
+transition:
+transform 180ms ease,
+box-shadow 180ms ease,
+border-color 180ms ease;
+}
+
+.staff-order-group::before {
+content: "";
+position: absolute;
+top: 0;
+left: 18px;
+right: 18px;
+height: 3px;
+border-radius: 999px;
+background:
+linear-gradient(90deg, rgba(201, 152, 79, 0.88), rgba(191, 116, 76, 0.82), rgba(132, 72, 90, 0.78));
+opacity: 0.78;
+}
+
+.staff-order-group:hover {
+transform: translateY(-2px);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.90),
+0 22px 42px rgba(115, 77, 46, 0.11);
 }
 
 .staff-order-group.is-qr-table {
@@ -962,12 +1393,14 @@ flex-wrap: wrap;
 gap: 10px;
 align-items: center;
 justify-content: space-between;
+padding-bottom: 8px;
+border-bottom: 1px solid rgba(133, 86, 49, 0.10);
 }
 
 .staff-order-group-title {
 margin: 0;
 color: var(--staff-text-strong);
-font-size: 17px;
+font-size: 18px;
 letter-spacing: -0.01em;
 }
 
@@ -1046,6 +1479,7 @@ line-height: 1.45;
 }
 
 .staff-order-card {
+position: relative;
 display: grid;
 gap: 12px;
 padding: 18px;
@@ -1056,6 +1490,45 @@ linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(250, 243, 235, 0.94));
 box-shadow:
 inset 0 1px 0 rgba(255, 255, 255, 0.88),
 0 14px 28px rgba(115, 77, 46, 0.08);
+overflow: hidden;
+transition:
+transform 180ms ease,
+box-shadow 180ms ease,
+border-color 180ms ease,
+background 180ms ease;
+}
+
+.staff-order-card::before {
+content: "";
+position: absolute;
+inset: 0;
+pointer-events: none;
+background:
+linear-gradient(135deg, rgba(255, 255, 255, 0.34), transparent 30%),
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.10), transparent 12rem);
+}
+
+.staff-order-card::after {
+content: "";
+position: absolute;
+inset: 16px auto 16px 0;
+width: 3px;
+border-radius: 999px;
+background:
+linear-gradient(180deg, rgba(201, 152, 79, 0.78), rgba(191, 116, 76, 0.72), rgba(132, 72, 90, 0.68));
+opacity: 0.52;
+}
+
+.staff-order-card > * {
+position: relative;
+z-index: 1;
+}
+
+.staff-order-card:hover {
+transform: translateY(-2px);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.92),
+0 20px 36px rgba(115, 77, 46, 0.12);
 }
 
 .staff-order-card.is-new-order {
@@ -1068,6 +1541,12 @@ inset 0 1px 0 rgba(255, 255, 255, 0.92),
 0 18px 36px rgba(201, 152, 79, 0.12);
 }
 
+.staff-order-card.is-new-order::after {
+background:
+linear-gradient(180deg, rgba(201, 152, 79, 0.96), rgba(191, 116, 76, 0.86));
+opacity: 0.92;
+}
+
 .staff-order-card.is-new-support {
 border-color: rgba(185, 78, 64, 0.30);
 background:
@@ -1078,11 +1557,23 @@ inset 0 1px 0 rgba(255, 255, 255, 0.92),
 0 18px 36px rgba(185, 78, 64, 0.12);
 }
 
+.staff-order-card.is-new-support::after {
+background:
+linear-gradient(180deg, rgba(201, 101, 83, 0.92), rgba(118, 60, 85, 0.86));
+opacity: 0.94;
+}
+
 .staff-order-card.is-addon {
 border-color: rgba(116, 101, 163, 0.24);
 background:
 radial-gradient(circle at top right, rgba(116, 101, 163, 0.13), transparent 13rem),
 linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 239, 251, 0.92));
+}
+
+.staff-order-card.is-addon::after {
+background:
+linear-gradient(180deg, rgba(116, 101, 163, 0.86), rgba(93, 79, 146, 0.78));
+opacity: 0.88;
 }
 
 .staff-order-topline,
@@ -1118,6 +1609,14 @@ letter-spacing: 0.01em;
 .staff-order-time {
 color: var(--staff-muted);
 font-size: 13px;
+display: inline-flex;
+align-items: center;
+padding: 7px 11px;
+border-radius: 999px;
+border: 1px solid rgba(133, 86, 49, 0.10);
+background: rgba(255, 252, 247, 0.82);
+box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+font-weight: 800;
 }
 
 .staff-badge {
@@ -1197,8 +1696,11 @@ align-items: center;
 padding: 7px 10px;
 border-radius: 14px;
 border: 1px solid rgba(133, 86, 49, 0.10);
-background: rgba(255, 255, 255, 0.55);
-box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74);
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(246, 236, 224, 0.84));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.82),
+0 10px 18px rgba(115, 77, 46, 0.05);
 }
 
 .staff-order-actions {
@@ -1232,6 +1734,54 @@ width: auto;
 display: none;
 }
 
+@media (max-width: 1080px) {
+.staff-dashboard-layout {
+grid-template-columns: 1fr;
+gap: 18px;
+}
+
+.staff-dashboard-shell.is-sidebar-collapsed .staff-dashboard-sidebar {
+display: none;
+}
+
+.staff-dashboard-sidebar {
+position: static;
+padding: 18px;
+}
+
+.staff-dashboard-sidebar .staff-view-tabs {
+display: flex;
+flex-wrap: wrap;
+}
+
+.staff-dashboard-sidebar .staff-view-tab {
+flex: 1 1 calc(33.333% - 8px);
+justify-content: center;
+text-align: center;
+}
+
+.staff-dashboard-sidebar .staff-view-tab-count {
+margin-left: 0;
+}
+
+.staff-workspace-topbar {
+display: grid;
+justify-content: stretch;
+}
+
+.staff-workspace-actions {
+justify-content: flex-start;
+}
+
+.staff-sidebar-toggle-btn {
+display: inline-flex;
+}
+
+.staff-section-toolbar .staff-orders-search {
+grid-column: auto;
+}
+}
+
 @media (max-width: 760px) {
 .staff-wrap {
 width: min(1120px, calc(100% - 20px));
@@ -1255,6 +1805,30 @@ gap: 16px;
 padding: 18px;
 }
 
+.staff-workspace-topbar {
+padding: 16px;
+border-radius: 20px;
+}
+
+.staff-workspace-actions {
+justify-content: flex-start;
+}
+
+.staff-dashboard-sidebar {
+padding: 16px;
+border-radius: 22px;
+}
+
+.staff-sidebar-header {
+align-items: flex-start;
+}
+
+.staff-sidebar-brand,
+.staff-sidebar-note {
+padding: 16px;
+border-radius: 18px;
+}
+
 .staff-dashboard-top-actions {
 justify-content: flex-start;
 }
@@ -1271,6 +1845,11 @@ grid-template-columns: 1fr;
 display: grid;
 }
 
+.staff-section-toolbar {
+padding: 14px;
+border-radius: 20px;
+}
+
 .staff-view-tabs {
 border-radius: 20px;
 padding: 8px;
@@ -1279,6 +1858,12 @@ padding: 8px;
 .staff-view-tab {
 flex: 1 1 calc(50% - 10px);
 justify-content: center;
+}
+
+.staff-dashboard-sidebar .staff-view-tab {
+flex: 1 1 calc(50% - 10px);
+justify-content: center;
+text-align: center;
 }
 
 .staff-card {
@@ -1350,9 +1935,9 @@ padding-left: 18px;
     <header class="staff-header">
       <div>
         <p class="staff-kicker">Limited Hotel Access</p>
-        <h1 class="staff-title">Staff Orders</h1>
+        <h1 class="staff-title">Staff Dashboard</h1>
         <p class="staff-sub">
-          A separate billing screen for one hotel at a time. This page is intentionally separate from the full admin dashboard.
+          A separate hotel workspace for orders, support, reservations, inquiries, contacts, and testimonials. This page stays intentionally separate from the full admin dashboard.
         </p>
       </div>
     </header>
@@ -1393,29 +1978,66 @@ padding-left: 18px;
       </aside>
     </section>
 
-    <section id="staffDashboardWrap" class="staff-card staff-dashboard-shell" aria-label="Staff orders dashboard">
-      <div class="staff-dashboard-hero">
+    <section id="staffDashboardWrap" class="staff-dashboard-shell" aria-label="Staff dashboard">
+      <div class="staff-dashboard-layout">
+        <aside id="staffSidebarNavigation" class="staff-dashboard-sidebar" aria-label="Staff dashboard navigation">
+          <div class="staff-sidebar-brand">
+            <div class="staff-sidebar-header">
+              <div class="staff-sidebar-heading">
+                <p class="staff-kicker">Hotel Dashboard</p>
+                <h2 class="staff-sidebar-title">Staff workspace</h2>
+              </div>
+              <span class="staff-sidebar-section-count" aria-label="Available sections">7</span>
+            </div>
+            <p class="staff-sidebar-copy">Move between live hotel sections from one structured workspace while keeping the same limited hotel-scoped access model.</p>
+          </div>
+
+          <div class="staff-view-tabs" role="tablist" aria-label="Staff dashboard sections">
+            <button class="staff-view-tab is-active" type="button" data-staff-view="dashboard" aria-selected="true">Dashboard</button>
+            <button class="staff-view-tab" type="button" data-staff-view="orders" aria-selected="false">Orders <span id="staffOrdersTabCount" class="staff-view-tab-count">0</span></button>
+            <button class="staff-view-tab" type="button" data-staff-view="support" aria-selected="false">Support <span id="staffSupportTabCount" class="staff-view-tab-count">0</span></button>
+            <button class="staff-view-tab" type="button" data-staff-view="reservations" aria-selected="false">Reservations <span id="staffReservationsTabCount" class="staff-view-tab-count">0</span></button>
+            <button class="staff-view-tab" type="button" data-staff-view="inquiries" aria-selected="false">Inquiries <span id="staffInquiriesTabCount" class="staff-view-tab-count">0</span></button>
+            <button class="staff-view-tab" type="button" data-staff-view="contacts" aria-selected="false">Contacts <span id="staffContactsTabCount" class="staff-view-tab-count">0</span></button>
+            <button class="staff-view-tab" type="button" data-staff-view="testimonials" aria-selected="false">Testimonials <span id="staffTestimonialsTabCount" class="staff-view-tab-count">0</span></button>
+          </div>
+
+          <div class="staff-sidebar-note">
+            <span class="staff-section-pill">Hotel scoped access</span>
+            <p class="staff-hint">Orders, reservations, inquiries, contacts, support requests, and testimonial moderation stay limited to the logged-in hotel only.</p>
+          </div>
+        </aside>
+
+        <div class="staff-dashboard-main">
+          <div class="staff-workspace-topbar" aria-label="Staff workspace context">
+            <div class="staff-workspace-context">
+              <p class="staff-kicker">Hotel operations</p>
+              <div class="staff-workspace-title-row">
+                <h2 id="staffWorkspaceTitle" class="staff-workspace-title">Dashboard overview</h2>
+                <span id="staffWorkspaceViewBadge" class="staff-section-pill">Dashboard</span>
+              </div>
+              <p id="staffWorkspaceDescription" class="staff-workspace-copy">Start from the hotel snapshot, then move into live orders, guest communication, and operational follow-up without leaving this workspace.</p>
+            </div>
+
+            <div class="staff-workspace-actions">
+              <button id="staffSidebarToggleBtn" class="staff-btn secondary staff-sidebar-toggle-btn" type="button" aria-expanded="true" aria-controls="staffSidebarNavigation">Show sections</button>
+              <span id="staffWorkspaceHotelBadge" class="staff-dashboard-pill is-muted">Hotel: this hotel</span>
+              <span class="staff-dashboard-pill is-muted">Limited hotel access</span>
+            </div>
+          </div>
+
+          <div class="staff-dashboard-hero">
         <div>
           <p class="staff-kicker">Owner Workspace</p>
-          <h2 class="staff-dashboard-title">Dashboard for <span id="staffSessionHotel">this hotel</span></h2>
-          <p class="staff-hint staff-dashboard-copy">A limited, hotel-scoped view for orders, billing, table support, reservations, inquiries, and contact messages. Raw records stay hidden until you open a section.</p>
+          <h2 class="staff-dashboard-title">Operations for <span id="staffSessionHotel">this hotel</span></h2>
+          <p class="staff-hint staff-dashboard-copy">A limited, hotel-scoped view for orders, billing, table support, reservations, inquiries, contact messages, and guest reviews. Open the section you need without leaving the workspace.</p>
         </div>
 
         <div class="staff-dashboard-top-actions">
-          <span class="staff-dashboard-pill">Hotel scoped</span>
+          <span class="staff-dashboard-pill is-muted">Staff session</span>
           <span id="staffLiveRefreshStatus" class="staff-dashboard-pill is-live" aria-live="polite">Live updates on</span>
           <button id="staffLogoutBtn" class="staff-btn secondary" type="button">Logout</button>
         </div>
-      </div>
-
-      <div class="staff-view-tabs" role="tablist" aria-label="Staff dashboard sections">
-        <button class="staff-view-tab is-active" type="button" data-staff-view="dashboard" aria-selected="true">Dashboard</button>
-        <button class="staff-view-tab" type="button" data-staff-view="orders" aria-selected="false">Orders <span id="staffOrdersTabCount" class="staff-view-tab-count">0</span></button>
-        <button class="staff-view-tab" type="button" data-staff-view="support" aria-selected="false">Support <span id="staffSupportTabCount" class="staff-view-tab-count">0</span></button>
-        <button class="staff-view-tab" type="button" data-staff-view="reservations" aria-selected="false">Reservations <span id="staffReservationsTabCount" class="staff-view-tab-count">0</span></button>
-        <button class="staff-view-tab" type="button" data-staff-view="inquiries" aria-selected="false">Inquiries <span id="staffInquiriesTabCount" class="staff-view-tab-count">0</span></button>
-        <button class="staff-view-tab" type="button" data-staff-view="contacts" aria-selected="false">Contacts <span id="staffContactsTabCount" class="staff-view-tab-count">0</span></button>
-        <button class="staff-view-tab" type="button" data-staff-view="testimonials" aria-selected="false">Testimonials <span id="staffTestimonialsTabCount" class="staff-view-tab-count">0</span></button>
       </div>
 
       <section id="staffHomePanel" class="staff-view-panel" data-staff-view-panel="dashboard" aria-label="Staff dashboard overview">
@@ -1490,7 +2112,7 @@ padding-left: 18px;
           </div>
         </div>
 
-        <div class="staff-actions">
+        <div class="staff-actions staff-section-toolbar">
           <input id="staffOrdersSearchInput" class="staff-input staff-orders-search" type="search" placeholder="Search customer, phone, address, table, or order id" aria-label="Search orders" />
           <select id="staffOrdersRangeInput" class="staff-select" aria-label="Order range">
             <option value="today">Today</option>
@@ -1537,7 +2159,7 @@ padding-left: 18px;
 
         <p id="staffOrdersFilterStatus" class="staff-filter-status" hidden></p>
 
-        <div id="staffOrdersContent" class="staff-empty">
+        <div id="staffOrdersContent" class="staff-empty staff-section-stage">
           Login to load orders for the selected range.
         </div>
       </section>
@@ -1555,7 +2177,7 @@ padding-left: 18px;
           </div>
         </div>
 
-        <div class="staff-actions">
+        <div class="staff-actions staff-section-toolbar">
           <select id="staffSupportRangeInput" class="staff-select" aria-label="Support request range">
             <option value="today">Today</option>
             <option value="week">Last 7 days</option>
@@ -1574,7 +2196,7 @@ padding-left: 18px;
 
         <div id="staffSupportSummary" class="staff-summary-grid" hidden></div>
 
-        <div id="staffSupportContent" class="staff-empty">
+        <div id="staffSupportContent" class="staff-empty staff-section-stage">
           Open Support to load hotel-scoped table requests.
         </div>
       </section>
@@ -1589,7 +2211,7 @@ padding-left: 18px;
           <span class="staff-section-pill">Status actions</span>
         </div>
 
-        <div class="staff-actions">
+        <div class="staff-actions staff-section-toolbar">
           <select id="staffReservationsRangeInput" class="staff-select" aria-label="Reservation range">
             <option value="today">Today</option>
             <option value="week">Last 7 days</option>
@@ -1609,7 +2231,7 @@ padding-left: 18px;
 
         <div id="staffReservationsSummary" class="staff-summary-grid" hidden></div>
 
-        <div id="staffReservationsContent" class="staff-empty">
+        <div id="staffReservationsContent" class="staff-empty staff-section-stage">
           Open Reservations to load hotel-scoped reservation requests.
         </div>
       </section>
@@ -1624,7 +2246,7 @@ padding-left: 18px;
           <span class="staff-section-pill">Status actions</span>
         </div>
 
-        <div class="staff-actions">
+        <div class="staff-actions staff-section-toolbar">
           <select id="staffInquiriesRangeInput" class="staff-select" aria-label="Inquiry range">
             <option value="today">Today</option>
             <option value="week">Last 7 days</option>
@@ -1643,7 +2265,7 @@ padding-left: 18px;
 
         <div id="staffInquiriesSummary" class="staff-summary-grid" hidden></div>
 
-        <div id="staffInquiriesContent" class="staff-empty">
+        <div id="staffInquiriesContent" class="staff-empty staff-section-stage">
           Open Inquiries to load hotel-scoped inquiry requests.
         </div>
       </section>
@@ -1658,7 +2280,7 @@ padding-left: 18px;
           <span class="staff-section-pill">Status actions</span>
         </div>
 
-        <div class="staff-actions">
+        <div class="staff-actions staff-section-toolbar">
           <select id="staffContactsRangeInput" class="staff-select" aria-label="Contact message range">
             <option value="today">Today</option>
             <option value="week">Last 7 days</option>
@@ -1678,7 +2300,7 @@ padding-left: 18px;
 
         <div id="staffContactsSummary" class="staff-summary-grid" hidden></div>
 
-        <div id="staffContactsContent" class="staff-empty">
+        <div id="staffContactsContent" class="staff-empty staff-section-stage">
           Open Contacts to load hotel-scoped contact messages.
         </div>
       </section>
@@ -1693,7 +2315,7 @@ padding-left: 18px;
           <span class="staff-section-pill">Approval actions</span>
         </div>
 
-        <div class="staff-actions">
+        <div class="staff-actions staff-section-toolbar">
           <select id="staffTestimonialsRangeInput" class="staff-select" aria-label="Testimonials range">
             <option value="today">Today</option>
             <option value="week">Last 7 days</option>
@@ -1710,10 +2332,12 @@ padding-left: 18px;
 
         <div id="staffTestimonialsSummary" class="staff-summary-grid" hidden></div>
 
-        <div id="staffTestimonialsContent" class="staff-empty">
+        <div id="staffTestimonialsContent" class="staff-empty staff-section-stage">
           Open Testimonials to load hotel-scoped reviews.
         </div>
       </section>
+        </div>
+      </div>
     </section>
   </main>
   <script src="js/app-config.js"></script>

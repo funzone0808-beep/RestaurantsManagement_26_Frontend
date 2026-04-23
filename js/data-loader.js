@@ -13,6 +13,7 @@ window.APP_STATE = {
     orderType: "standard",
     tableNumber: "",
     orderSource: "website",
+    qrContextToken: "",
     addToOrderId: "",
     addToken: ""
   }
@@ -194,6 +195,7 @@ function getOrderContextFromQuery() {
       orderType: "standard",
       tableNumber: "",
       orderSource: "website",
+      qrContextToken: "",
       addToOrderId: "",
       addToken: ""
     };
@@ -207,11 +209,16 @@ function getOrderContextFromQuery() {
     params.get("addToken") || params.get("trackingToken"),
     200
   );
+  const qrContextToken = normalizeOrderContextParam(
+    params.get("qctx") || params.get("qrContextToken"),
+    2000
+  );
 
   return {
     orderType: "dine-in",
     tableNumber,
     orderSource: normalizeOrderContextParam(params.get("source"), 40) || "qr",
+    qrContextToken,
     addToOrderId,
     addToken
   };
@@ -359,6 +366,11 @@ function normalizeTheme(rawTheme) {
     rawTheme.payment?.upiDiscountPercent,
     null
   );
+  const deliveryCharge = normalizeFiniteNumber(
+    rawTheme.payment?.deliveryCharge,
+    null,
+    { min: 0, max: 100000 }
+  );
   const contentSource = isPlainObject(rawTheme.content) ? rawTheme.content : {};
   const navLabels = normalizeThemeTextGroup(
     contentSource.navLabels,
@@ -439,8 +451,16 @@ function normalizeTheme(rawTheme) {
     normalizedTheme.buttons = { preset: buttonPreset };
   }
 
-  if (upiDiscountPercent !== null) {
-    normalizedTheme.payment = { upiDiscountPercent };
+  if (upiDiscountPercent !== null || deliveryCharge !== null) {
+    normalizedTheme.payment = {};
+
+    if (upiDiscountPercent !== null) {
+      normalizedTheme.payment.upiDiscountPercent = upiDiscountPercent;
+    }
+
+    if (deliveryCharge !== null) {
+      normalizedTheme.payment.deliveryCharge = deliveryCharge;
+    }
   }
 
   if (
@@ -801,11 +821,75 @@ async function fetchJson(url) {
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}`);
+    const error = new Error(`Failed to fetch ${url}`);
+    error.status = response.status;
+    error.url = url;
+    throw error;
   }
 
   return response.json();
 }
+
+function waitForNextFetchAttempt(delayMs) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, Math.max(0, Number(delayMs) || 0));
+  });
+}
+
+async function fetchJsonWithRetry(
+  url,
+  { retries = 0, retryDelayMs = 250, timeoutMs = 0 } = {}
+) {
+  let attempt = 0;
+
+  while (true) {
+    let controller = null;
+    let timeoutId = null;
+
+    try {
+      if (timeoutMs > 0 && typeof AbortController !== "undefined") {
+        controller = new AbortController();
+        timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+      }
+
+      const response = await fetch(url, controller ? { signal: controller.signal } : undefined);
+
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+
+      if (!response.ok) {
+        const error = new Error(`Failed to fetch ${url}`);
+        error.status = response.status;
+        error.url = url;
+        throw error;
+      }
+
+      return response.json();
+    } catch (error) {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+
+      const status = Number(error?.status || 0);
+      const isAbortError = error?.name === "AbortError";
+      const isRetryable = isAbortError || !status || status >= 500;
+
+      if (attempt >= retries || !isRetryable) {
+        throw error;
+      }
+
+      attempt += 1;
+      await waitForNextFetchAttempt(retryDelayMs);
+    }
+  }
+}
+
+const STARTUP_FETCH_OPTIONS = Object.freeze({
+  retries: 1,
+  retryDelayMs: 250,
+  timeoutMs: 6000
+});
 
 async function resolveHotelSlug() {
   const querySlug = normalizeHotelSlug(getHotelSlugFromQuery());
@@ -823,8 +907,9 @@ async function resolveHotelSlug() {
   }
 
   try {
-    const result = await fetchJson(
-      `${TENANT_API_BASE}/resolve?host=${encodeURIComponent(host)}`
+    const result = await fetchJsonWithRetry(
+      `${TENANT_API_BASE}/resolve?host=${encodeURIComponent(host)}`,
+      STARTUP_FETCH_OPTIONS
     );
     const resolvedSlug = normalizeHotelSlug(result.hotel?.slug);
 
@@ -872,33 +957,38 @@ function mapHotelProfileToFrontendShape(rawHotel) {
   };
 }
 
-async function loadAppData() {
+async function loadAppData({
+  includeGallery = true,
+  includeTestimonials = true
+} = {}) {
   const hotelSlug = await resolveHotelSlug();
 
+  const galleryPromise = includeGallery
+    ? fetchJson(`${PUBLIC_API_BASE}/gallery/${hotelSlug}`)
+        .then((galleryResult) => normalizeGallery(galleryResult.gallery))
+        .catch((error) => {
+          console.warn("Failed to load gallery data. Falling back to empty gallery.", error);
+          return [];
+        })
+    : Promise.resolve([]);
+
+  const testimonialsPromise = includeTestimonials
+    ? fetchJson(`${PUBLIC_API_BASE}/testimonials/${hotelSlug}`)
+        .then((testimonialsResult) => normalizeTestimonials(testimonialsResult.testimonials))
+        .catch((error) => {
+          console.warn(
+            "Failed to load testimonials data. Falling back to empty testimonials.",
+            error
+          );
+          return [];
+        })
+    : Promise.resolve([]);
+
   const [hotelResult, menuResult] = await Promise.all([
-    fetchJson(`${PUBLIC_API_BASE}/hotel/${hotelSlug}`),
-    fetchJson(`${PUBLIC_API_BASE}/menu/${hotelSlug}`)
+    fetchJsonWithRetry(`${PUBLIC_API_BASE}/hotel/${hotelSlug}`, STARTUP_FETCH_OPTIONS),
+    fetchJsonWithRetry(`${PUBLIC_API_BASE}/menu/${hotelSlug}`, STARTUP_FETCH_OPTIONS)
   ]);
-  let gallery = [];
-
-  try {
-    const galleryResult = await fetchJson(`${PUBLIC_API_BASE}/gallery/${hotelSlug}`);
-    gallery = normalizeGallery(galleryResult.gallery);
-  } catch (error) {
-    console.warn("Failed to load gallery data. Falling back to empty gallery.", error);
-  }
-
-  let testimonials = [];
-
-  try {
-    const testimonialsResult = await fetchJson(`${PUBLIC_API_BASE}/testimonials/${hotelSlug}`);
-    testimonials = normalizeTestimonials(testimonialsResult.testimonials);
-  } catch (error) {
-    console.warn(
-      "Failed to load testimonials data. Falling back to empty testimonials.",
-      error
-    );
-  }
+  const [gallery, testimonials] = await Promise.all([galleryPromise, testimonialsPromise]);
 
   const hotel = mapHotelProfileToFrontendShape(hotelResult.hotel);
   const normalizedMenu = normalizePublicMenu(menuResult.menu);

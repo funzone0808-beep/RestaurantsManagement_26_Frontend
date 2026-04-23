@@ -184,14 +184,20 @@
       return;
     }
 
-    const actionLabel = requestAction === "bill" ? "Bill request" : "Staff help request";
+    const isBillRequest = requestAction === "bill";
+    const actionLabel = isBillRequest ? "Bill request" : "Staff help request";
     const url = `${API_BASE}/order-tracking/${encodeURIComponent(context.hotelSlug)}/${encodeURIComponent(context.orderId)}/support-requests`;
     const body = JSON.stringify({
       token: context.token,
       action: requestAction
     });
 
-    setTableSupportStatus(`${actionLabel} is being sent. WhatsApp will open as backup.`, "info");
+    setTableSupportStatus(
+      isBillRequest
+        ? "Sending your bill request. WhatsApp is also available as backup."
+        : "Sending your staff request. WhatsApp is also available as backup.",
+      "info"
+    );
 
     void fetch(url, {
       method: "POST",
@@ -205,19 +211,39 @@
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         console.warn("Table support request was not saved:", payload.message || response.statusText);
-        setTableSupportStatus("WhatsApp opened. The dashboard save did not complete, so staff can still receive your message there.", "warning");
+        setTableSupportStatus(
+          isBillRequest
+            ? "We could not save your bill request to the dashboard. WhatsApp opened as backup so staff can still receive it there."
+            : "We could not save your staff request to the dashboard. WhatsApp opened as backup so staff can still receive it there.",
+          "warning"
+        );
         return;
       }
 
       if (payload.saved === false) {
-        setTableSupportStatus("WhatsApp opened. Staff can receive your message there while dashboard storage is being prepared.", "warning");
+        setTableSupportStatus(
+          isBillRequest
+            ? "Your bill request was not stored in the dashboard yet. WhatsApp is available as backup so staff can still receive it there."
+            : "Your staff request was not stored in the dashboard yet. WhatsApp is available as backup so staff can still receive it there.",
+          "warning"
+        );
         return;
       }
 
-      setTableSupportStatus(`${actionLabel} sent to the hotel dashboard. WhatsApp is also available as backup.`, "success");
+      setTableSupportStatus(
+        isBillRequest
+          ? "Your bill request has been sent. Please wait for owner/staff confirmation."
+          : "Your staff request has been sent. Please wait for owner/staff confirmation.",
+        "success"
+      );
     }).catch((error) => {
       console.warn("Table support request save skipped:", error.message);
-      setTableSupportStatus("WhatsApp opened. The dashboard save could not finish, so staff can still receive your message there.", "warning");
+      setTableSupportStatus(
+        isBillRequest
+          ? "We could not complete your bill request in the dashboard. WhatsApp opened as backup so staff can still receive it there."
+          : "We could not complete your staff request in the dashboard. WhatsApp opened as backup so staff can still receive it there.",
+        "warning"
+      );
     });
   }
 
@@ -291,6 +317,18 @@
     }
 
     return "Not Billed";
+  }
+
+  function canViewBill(order = {}) {
+    const billNumber = normalizeText(order.billNumber, 120);
+    const billingStatus = normalizeText(order.billingStatus, 60).toLowerCase();
+    const paymentStatus = normalizeText(order.paymentStatus, 60).toLowerCase();
+
+    return (
+      Boolean(billNumber) ||
+      ["billed", "closed"].includes(billingStatus) ||
+      paymentStatus === "paid"
+    );
   }
 
   function updateCombinedStateRows(order = {}) {
@@ -444,6 +482,9 @@
       : {};
     const requestBillLink = $("#requestBillLink");
     const callStaffLink = $("#callStaffLink");
+    const title = $("#trackingTableActionsTitle");
+    const description = $("#trackingTableActionsDescription");
+    const billReady = canViewBill(order);
 
     if (!hasTableActions(order)) {
       section.hidden = true;
@@ -451,14 +492,33 @@
       return;
     }
 
+    if (title) {
+      title.textContent = billReady
+        ? "Your bill is ready"
+        : "Need anything at your table?";
+    }
+
+    if (description) {
+      description.textContent = billReady
+        ? "You can review the bill above. If you still need help at your table, call staff here and they can assist you."
+        : "These actions use the same hotel WhatsApp flow, so staff can receive your table and order details quickly.";
+    }
+
     if (requestBillLink) {
       requestBillLink.href = actions.requestBillWhatsappLink || "#";
-      requestBillLink.hidden = !actions.requestBillWhatsappLink;
+      requestBillLink.hidden = billReady || !actions.requestBillWhatsappLink;
     }
 
     if (callStaffLink) {
       callStaffLink.href = actions.callStaffWhatsappLink || "#";
       callStaffLink.hidden = !actions.callStaffWhatsappLink;
+    }
+
+    if (billReady) {
+      setTableSupportStatus(
+        "Your bill is now available above. Please review it and wait for owner/staff confirmation if any final payment step is still pending.",
+        "success"
+      );
     }
 
     section.hidden = false;
@@ -597,6 +657,156 @@
     section.hidden = false;
   }
 
+  function renderBillItems(container, items = []) {
+    if (!container) return;
+    container.innerHTML = "";
+
+    if (!Array.isArray(items) || !items.length) {
+      const empty = document.createElement("p");
+      empty.className = "tracking-empty";
+      empty.textContent = "No bill items are available yet.";
+      container.appendChild(empty);
+      return;
+    }
+
+    items.forEach((item) => {
+      const row = document.createElement("div");
+      const detail = document.createElement("div");
+      const name = document.createElement("strong");
+      const qty = document.createElement("span");
+      const amount = document.createElement("strong");
+
+      row.className = "tracking-bill-item";
+      detail.className = "tracking-bill-item__detail";
+      name.textContent = item.name || "Menu item";
+      qty.textContent = `Qty ${Number(item.qty || 0)}`;
+      amount.textContent = formatMoney(item.lineTotal || Number(item.price || 0) * Number(item.qty || 0));
+
+      detail.appendChild(name);
+      detail.appendChild(qty);
+      row.appendChild(detail);
+      row.appendChild(amount);
+      container.appendChild(row);
+    });
+  }
+
+  function renderBillAddOns(addOns = []) {
+    const section = $("#trackingBillAddons");
+    const list = $("#trackingBillAddonsList");
+    if (!section || !list) return;
+
+    list.innerHTML = "";
+
+    if (!Array.isArray(addOns) || !addOns.length) {
+      section.hidden = true;
+      return;
+    }
+
+    addOns.forEach((addOn) => {
+      const card = document.createElement("article");
+      const head = document.createElement("div");
+      const title = document.createElement("strong");
+      const meta = document.createElement("span");
+      const itemsWrap = document.createElement("div");
+      const total = document.createElement("p");
+
+      card.className = "tracking-bill-addon-card";
+      head.className = "tracking-bill-addon-card__head";
+      title.textContent = addOn.orderSequenceLabel || `Add-on Order #${addOn.id || ""}`;
+      meta.textContent = `${getStatusLabel(addOn.status)} - ${formatDateTime(addOn.createdAt)}`;
+      itemsWrap.className = "tracking-bill-addon-card__items";
+      total.className = "tracking-bill-addon-card__total";
+      total.textContent = `Add-on total: ${formatMoney(getTotalValue(addOn.totals || {}))}`;
+
+      head.appendChild(title);
+      head.appendChild(meta);
+      renderBillItems(itemsWrap, addOn.items);
+      card.appendChild(head);
+      card.appendChild(itemsWrap);
+      card.appendChild(total);
+      list.appendChild(card);
+    });
+
+    section.hidden = false;
+  }
+
+  function renderBillView(order = {}) {
+    const section = $("#trackingBillView");
+    const link = $("#trackingViewBillLink");
+    const billNumberRow = $("#trackingBillNumberRow");
+    const billNumberPill = $("#trackingBillNumberPill");
+    const billNumber = normalizeText(order.billNumber, 120);
+    const addOns = getOrderAddOns(order);
+    const totals = order.totals || {};
+    const isVisible = canViewBill(order);
+
+    if (!section || !link) return;
+
+    if (!isVisible) {
+      section.hidden = true;
+      link.hidden = true;
+      if (billNumberPill) {
+        billNumberPill.hidden = true;
+        billNumberPill.textContent = "Bill";
+      }
+      if (billNumberRow) {
+        billNumberRow.hidden = true;
+      }
+      renderBillAddOns([]);
+      return;
+    }
+
+    const billIntro = billNumber
+      ? `Bill ${billNumber} is now ready to review for this order.`
+      : "Your hotel has marked this order billed or paid. You can review the bill details below.";
+
+    setText("#trackingBillIntro", billIntro);
+    setText("#trackingBillOrderId", order.id ? `#${order.id}` : "-");
+    setText("#trackingBillSource", getSourceLabel(order));
+    setText("#trackingBillCreatedAt", formatDateTime(order.createdAt));
+    setText("#trackingBillPaymentStatus", order.paymentStatus || order.paymentMethod || "-");
+    setText("#trackingBillBillingStatus", order.billingStatus || "-");
+    setText("#trackingBillSubtotal", formatMoney(totals.subtotal));
+    setText("#trackingBillGst", formatMoney(totals.gst));
+    setText("#trackingBillTotal", formatMoney(getTotalValue(totals)));
+    setText("#trackingBillNumberValue", billNumber || "-");
+    setText("#trackingBillPaymentLabel", order.paymentStatus || order.paymentMethod || "-");
+    setText("#trackingBillBillingLabel", order.billingStatus || "-");
+
+    const combinedTotalRow = $("#trackingBillCombinedTotalRow");
+    const combinedTotalValue = $("#trackingBillCombinedTotal");
+    const combinedPaymentRow = $("#trackingBillCombinedPaymentRow");
+    const combinedPaymentValue = $("#trackingBillCombinedPayment");
+    const combinedBillingRow = $("#trackingBillCombinedBillingRow");
+    const combinedBillingValue = $("#trackingBillCombinedBilling");
+
+    if (billNumberRow) {
+      billNumberRow.hidden = !billNumber;
+    }
+
+    if (billNumberPill) {
+      billNumberPill.hidden = !billNumber;
+      billNumberPill.textContent = billNumber ? `Bill ${billNumber}` : "Bill";
+    }
+
+    if (combinedTotalRow && combinedTotalValue) {
+      combinedTotalRow.hidden = !addOns.length;
+      combinedTotalValue.textContent = formatMoney(getOrderCombinedTotal(order));
+    }
+
+    if (combinedPaymentRow && combinedPaymentValue && combinedBillingRow && combinedBillingValue) {
+      combinedPaymentRow.hidden = !addOns.length;
+      combinedBillingRow.hidden = !addOns.length;
+      combinedPaymentValue.textContent = addOns.length ? getCombinedPaymentLabel(order) : "-";
+      combinedBillingValue.textContent = addOns.length ? getCombinedBillingLabel(order) : "-";
+    }
+
+    renderBillItems($("#trackingBillItems"), order.items);
+    renderBillAddOns(addOns);
+    link.hidden = false;
+    section.hidden = false;
+  }
+
   function renderOrder(order = {}) {
     latestOrder = order;
 
@@ -623,6 +833,7 @@
 
     renderItems(order.items);
     renderAddOns(order.addOns);
+    renderBillView(order);
     updateStatusBadge(order);
     updateTimeline(order);
     updateBackToMenuLink(order);

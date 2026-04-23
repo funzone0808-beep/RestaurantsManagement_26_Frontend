@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="no-referrer" />
   <title>Track Your Order</title>
   <meta name="description" content="Track your hotel food order status securely." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -133,6 +134,9 @@
               <p class="section-eyebrow">Payment</p>
               <h2>Bill summary</h2>
             </div>
+            <a id="trackingViewBillLink" class="btn btn-outline tracking-bill-link" href="#trackingBillView" hidden>
+              View Bill
+            </a>
           </div>
           <dl class="tracking-totals">
             <div>
@@ -171,11 +175,107 @@
         </article>
       </section>
 
+      <section id="trackingBillView" class="tracking-card tracking-panel tracking-bill-view" hidden aria-label="Customer bill view">
+        <div class="tracking-panel__head">
+          <div>
+            <p class="section-eyebrow">Bill</p>
+            <h2>Your bill</h2>
+            <p id="trackingBillIntro" class="tracking-bill-view__intro">
+              Bill details will appear here when the hotel marks this order billed or paid.
+            </p>
+          </div>
+          <span id="trackingBillNumberPill" class="tracking-pill" hidden>Bill</span>
+        </div>
+
+        <div class="tracking-bill-view__meta">
+          <div>
+            <span>Order</span>
+            <strong id="trackingBillOrderId">-</strong>
+          </div>
+          <div>
+            <span>Source</span>
+            <strong id="trackingBillSource">-</strong>
+          </div>
+          <div>
+            <span>Placed</span>
+            <strong id="trackingBillCreatedAt">-</strong>
+          </div>
+          <div>
+            <span>Payment</span>
+            <strong id="trackingBillPaymentStatus">-</strong>
+          </div>
+          <div>
+            <span>Billing</span>
+            <strong id="trackingBillBillingStatus">-</strong>
+          </div>
+        </div>
+
+        <div class="tracking-bill-view__body">
+          <section class="tracking-bill-block" aria-label="Bill items">
+            <div class="tracking-bill-block__head">
+              <h3>Main order</h3>
+            </div>
+            <div id="trackingBillItems" class="tracking-bill-items"></div>
+          </section>
+
+          <section id="trackingBillAddons" class="tracking-bill-block" hidden aria-label="Bill add-ons">
+            <div class="tracking-bill-block__head">
+              <h3>Additional table orders</h3>
+            </div>
+            <div id="trackingBillAddonsList" class="tracking-bill-addons"></div>
+          </section>
+
+          <section class="tracking-bill-block tracking-bill-block--summary" aria-label="Bill totals">
+            <div class="tracking-bill-block__head">
+              <h3>Total summary</h3>
+            </div>
+            <dl class="tracking-totals tracking-bill-totals">
+              <div id="trackingBillNumberRow" hidden>
+                <dt>Bill Number</dt>
+                <dd id="trackingBillNumberValue">-</dd>
+              </div>
+              <div>
+                <dt>Subtotal</dt>
+                <dd id="trackingBillSubtotal">Rs. 0.00</dd>
+              </div>
+              <div>
+                <dt>GST</dt>
+                <dd id="trackingBillGst">Rs. 0.00</dd>
+              </div>
+              <div class="tracking-total-main">
+                <dt>Total</dt>
+                <dd id="trackingBillTotal">Rs. 0.00</dd>
+              </div>
+              <div id="trackingBillCombinedTotalRow" class="tracking-combined-total" hidden>
+                <dt>Table Total</dt>
+                <dd id="trackingBillCombinedTotal">Rs. 0.00</dd>
+              </div>
+              <div>
+                <dt>Payment</dt>
+                <dd id="trackingBillPaymentLabel">-</dd>
+              </div>
+              <div id="trackingBillCombinedPaymentRow" class="tracking-combined-state" hidden>
+                <dt>Table Payment</dt>
+                <dd id="trackingBillCombinedPayment">-</dd>
+              </div>
+              <div>
+                <dt>Billing</dt>
+                <dd id="trackingBillBillingLabel">-</dd>
+              </div>
+              <div id="trackingBillCombinedBillingRow" class="tracking-combined-state" hidden>
+                <dt>Table Billing</dt>
+                <dd id="trackingBillCombinedBilling">-</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+      </section>
+
       <section id="trackingTableActions" class="tracking-card tracking-table-actions" hidden aria-label="Table assistance">
         <div>
           <p class="section-eyebrow">Table Support</p>
-          <h2>Need anything at your table?</h2>
-          <p>
+          <h2 id="trackingTableActionsTitle">Need anything at your table?</h2>
+          <p id="trackingTableActionsDescription">
             These actions use the same hotel WhatsApp flow, so staff can receive your table and order details quickly.
           </p>
         </div>

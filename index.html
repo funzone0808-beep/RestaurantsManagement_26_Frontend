@@ -19,11 +19,11 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
 
   <!-- Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js" defer></script>
 
   <!-- GSAP + ScrollTrigger -->
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.4/dist/gsap.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.4/dist/ScrollTrigger.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.4/dist/gsap.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.4/dist/ScrollTrigger.min.js" defer></script>
 
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -106,10 +106,10 @@
       <div class="about-grid">
         <div class="about-images">
           <div class="about-img-main reveal-img">
-            <img src="img/about.jpg" alt="Elegant restaurant interior with candlelight" loading="lazy" />
+            <img src="img/about.jpg" alt="Elegant restaurant interior with candlelight" loading="lazy" decoding="async" />
           </div>
           <div class="about-img-sub reveal-img">
-            <img src="https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?w=400&q=80" alt="Chef preparing gourmet dish" loading="lazy" />
+            <img src="https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?w=400&q=80" alt="Chef preparing gourmet dish" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer" />
             <!-- <img src="https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?w=400&q=80" alt="Chef preparing gourmet dish" loading="lazy" /> -->
          
           </div>
@@ -213,6 +213,10 @@
         <span>GST (<span id="gstPercentLabel">5</span>%)</span>
         <strong id="cartGst">₹0</strong>
       </div>
+      <div class="cart-total-row" id="cartDeliveryChargeRow" hidden>
+        <span>Delivery Charge</span>
+        <strong id="cartDeliveryCharge">₹0</strong>
+      </div>
       <div class="cart-total-row grand">
         <span>Total</span>
         <strong id="cartTotal">₹0</strong>
@@ -230,7 +234,7 @@
         <input type="tel" id="orderPhone" maxlength="10" placeholder="9876543210" required />
       </div>
 
-      <div class="form-group">
+      <div class="form-group" id="orderAddressField">
   <label for="orderAddress">Delivery Address *</label>
   <textarea id="orderAddress" rows="3" placeholder="Enter full address" required></textarea>
 </div>
@@ -318,7 +322,7 @@
   <!-- ─── RESERVATION SECTION ──────────────────────────── -->
   <section id="reservation" class="reservation section" aria-label="Table Reservation">
     <div class="reservation-bg" aria-hidden="true">
-      <img src="https://images.unsplash.com/photo-1550966871-3ed3cfd27974?w=1600&q=80" alt="" role="presentation" />
+      <img src="https://images.unsplash.com/photo-1550966871-3ed3cfd27974?w=1600&q=80" alt="" role="presentation" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer" />
       <div class="reservation-overlay"></div>
     </div>
     <div class="container">
