@@ -114,8 +114,23 @@ const SUPPORTED_HERO_SCENE_PRESETS = [
   "minimal",
   "family"
 ];
+const SUPPORTED_HERO_SCENE_TEMPLATES = [
+  "default",
+  "orbital",
+  "sculptural",
+  "constellation"
+];
+const SUPPORTED_HERO_SCENE_MODEL_PRESETS = [
+  "none",
+  "coffee-cup",
+  "plated-dish",
+  "dessert",
+  "service-cloche"
+];
 const DEFAULT_HERO_SCENE_CONFIG = {
   enabled: true,
+  template: "default",
+  modelPreset: "none",
   preset: "default",
   toneMappingExposure: 1.2,
   cameraDistance: 12,
@@ -703,6 +718,20 @@ function normalizeHeroScenePreset(value) {
     : DEFAULT_HERO_SCENE_CONFIG.preset;
 }
 
+function normalizeHeroSceneTemplate(value) {
+  const candidate = normalizeThemeString(value, 50).toLowerCase();
+  return SUPPORTED_HERO_SCENE_TEMPLATES.includes(candidate)
+    ? candidate
+    : DEFAULT_HERO_SCENE_CONFIG.template;
+}
+
+function normalizeHeroSceneModelPreset(value) {
+  const candidate = normalizeThemeString(value, 50).toLowerCase();
+  return SUPPORTED_HERO_SCENE_MODEL_PRESETS.includes(candidate)
+    ? candidate
+    : DEFAULT_HERO_SCENE_CONFIG.modelPreset;
+}
+
 function getHeroScenePresetDefaults(preset) {
   return {
     ...DEFAULT_HERO_SCENE_CONFIG,
@@ -712,12 +741,16 @@ function getHeroScenePresetDefaults(preset) {
 
 function normalizeHeroSceneConfig(rawScene) {
   const scene = normalizeHotelProfileJsonObject(rawScene);
+  const template = normalizeHeroSceneTemplate(scene.template);
+  const modelPreset = normalizeHeroSceneModelPreset(scene.modelPreset);
   const preset = normalizeHeroScenePreset(scene.preset);
   const presetDefaults = getHeroScenePresetDefaults(preset);
 
   return {
     enabled:
       typeof scene.enabled === "boolean" ? scene.enabled : DEFAULT_HERO_SCENE_CONFIG.enabled,
+    template,
+    modelPreset,
     preset,
     toneMappingExposure: normalizeFiniteNumber(
       scene.toneMappingExposure,
@@ -793,6 +826,14 @@ function normalizeHeroContent(rawHero) {
     titleLine3:
       normalizeHotelProfileStringField(hero.titleLine3, 200) ||
       normalizeHotelProfileStringField(legacyStatsGroup.titleLine3, 200),
+    backgroundImageUrl: normalizeHotelProfileStringField(
+      hero.backgroundImageUrl,
+      2000
+    ),
+    backgroundImageAlt: normalizeHotelProfileStringField(
+      hero.backgroundImageAlt,
+      300
+    ),
     stats: normalizeHotelProfileObjectArrayField(hero.stats, "stats"),
     scene: normalizeHeroSceneConfig(hero.scene)
   };

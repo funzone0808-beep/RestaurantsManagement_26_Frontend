@@ -140,6 +140,19 @@ const PROFILE_HERO_SCENE_PRESETS = {
   minimal: "minimal",
   family: "family"
 };
+const PROFILE_HERO_SCENE_TEMPLATES = {
+  default: "default",
+  orbital: "orbital",
+  sculptural: "sculptural",
+  constellation: "constellation"
+};
+const PROFILE_HERO_SCENE_MODEL_PRESETS = {
+  none: "none",
+  "coffee-cup": "coffee-cup",
+  "plated-dish": "plated-dish",
+  dessert: "dessert",
+  "service-cloche": "service-cloche"
+};
 
 const PROFILE_THEME_SECTION_ORDER = [
   "about",
@@ -2954,6 +2967,26 @@ function bindProfileAboutImageUploadHelpers() {
   });
 }
 
+function bindProfileHeroImageUploadHelper() {
+  const btn = document.getElementById("profileHeroBackgroundImageUploadBtn");
+  if (!btn || btn.dataset.boundClick === "true") return;
+
+  btn.addEventListener("click", () => {
+    const hotelSlug =
+      document.getElementById("profileHotelSlugInput")?.value.trim() ||
+      getSelectedHotelSlug() ||
+      "shared";
+
+    openUploadSectionWithConfig({
+      hotelSlug,
+      folder: "hero",
+      targetFieldId: "profileHeroBackgroundImageUrlInput"
+    });
+  });
+
+  btn.dataset.boundClick = "true";
+}
+
 async function createHotel(payload) {
   return fetchJson(`${API_BASE}/hotels`, {
     method: "POST",
@@ -3361,6 +3394,16 @@ function setInputValue(id, value) {
 function getValidProfileHeroScenePreset(value) {
   const candidate = String(value || "").trim().toLowerCase();
   return PROFILE_HERO_SCENE_PRESETS[candidate] ? candidate : "";
+}
+
+function getValidProfileHeroSceneTemplate(value) {
+  const candidate = String(value || "").trim().toLowerCase();
+  return PROFILE_HERO_SCENE_TEMPLATES[candidate] ? candidate : "";
+}
+
+function getValidProfileHeroSceneModelPreset(value) {
+  const candidate = String(value || "").trim().toLowerCase();
+  return PROFILE_HERO_SCENE_MODEL_PRESETS[candidate] ? candidate : "";
 }
 
 function getOptionalNumberInputValue(id, label) {
@@ -4534,6 +4577,12 @@ function bindProfileForm() {
           ? { ...currentHero.scene }
           : {};
       const nextHeroScene = { ...currentHeroScene };
+      const heroSceneTemplate = getValidProfileHeroSceneTemplate(
+        document.getElementById("profileHeroSceneTemplateInput")?.value
+      );
+      const heroSceneModelPreset = getValidProfileHeroSceneModelPreset(
+        document.getElementById("profileHeroSceneModelPresetInput")?.value
+      );
       const heroScenePreset = getValidProfileHeroScenePreset(
         document.getElementById("profileHeroScenePresetInput")?.value
       );
@@ -4541,10 +4590,28 @@ function bindProfileForm() {
       nextHero.titleLine1 = document.getElementById("profileHeroLine1Input")?.value.trim();
       nextHero.titleLine2 = document.getElementById("profileHeroLine2Input")?.value.trim();
       nextHero.titleLine3 = document.getElementById("profileHeroLine3Input")?.value.trim();
+      nextHero.backgroundImageUrl = document
+        .getElementById("profileHeroBackgroundImageUrlInput")
+        ?.value.trim();
+      nextHero.backgroundImageAlt = document
+        .getElementById("profileHeroBackgroundImageAltInput")
+        ?.value.trim();
       nextHero.stats = parseJsonInput(document.getElementById("profileHeroStatsInput")?.value, []);
       nextHeroScene.enabled = Boolean(
         document.getElementById("profileHeroSceneEnabledInput")?.checked
       );
+
+      if (heroSceneTemplate) {
+        nextHeroScene.template = heroSceneTemplate;
+      } else {
+        delete nextHeroScene.template;
+      }
+
+      if (heroSceneModelPreset) {
+        nextHeroScene.modelPreset = heroSceneModelPreset;
+      } else {
+        delete nextHeroScene.modelPreset;
+      }
 
       if (heroScenePreset) {
         nextHeroScene.preset = heroScenePreset;
@@ -4741,9 +4808,17 @@ function fillProfileForm(profile) {
   document.getElementById("profileHeroLine1Input").value = hero.titleLine1 || "";
   document.getElementById("profileHeroLine2Input").value = hero.titleLine2 || "";
   document.getElementById("profileHeroLine3Input").value = hero.titleLine3 || "";
+  document.getElementById("profileHeroBackgroundImageUrlInput").value =
+    hero.backgroundImageUrl || "";
+  document.getElementById("profileHeroBackgroundImageAltInput").value =
+    hero.backgroundImageAlt || "";
   document.getElementById("profileHeroStatsInput").value = formatJson(hero.stats || []);
   document.getElementById("profileHeroSceneEnabledInput").checked =
     hero.scene?.enabled !== false;
+  document.getElementById("profileHeroSceneTemplateInput").value =
+    getValidProfileHeroSceneTemplate(hero.scene?.template);
+  document.getElementById("profileHeroSceneModelPresetInput").value =
+    getValidProfileHeroSceneModelPreset(hero.scene?.modelPreset);
   document.getElementById("profileHeroScenePresetInput").value =
     getValidProfileHeroScenePreset(hero.scene?.preset);
   document.getElementById("profileHeroSceneToneMappingExposureInput").value =
@@ -5211,6 +5286,7 @@ async function initAdmin() {
     bindQrTableLinkHelper();
     bindGalleryUploadHelper();
     bindProfileAboutImageUploadHelpers();
+    bindProfileHeroImageUploadHelper();
     bindHotelForm();
     bindMenuItemForm();
     bindGalleryItemForm();

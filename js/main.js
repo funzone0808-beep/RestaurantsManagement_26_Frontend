@@ -831,6 +831,29 @@ function renderAboutImages(about = {}) {
   });
 }
 
+function renderHeroBackgroundImage(hero = {}) {
+  const heroSection = document.getElementById("hero");
+  const heroImage = document.getElementById("heroBackgroundImage");
+  if (!heroSection || !heroImage) return;
+
+  const imageUrl = normalizeImagePath(hero.backgroundImageUrl || "");
+  const imageAlt = hero.backgroundImageAlt || "";
+  const sceneEnabled = hero.scene?.enabled !== false;
+  const shouldShow = !sceneEnabled && Boolean(imageUrl);
+
+  heroSection.dataset.heroBackgroundImage = shouldShow ? "true" : "false";
+  heroImage.hidden = !shouldShow;
+
+  if (!shouldShow) {
+    heroImage.removeAttribute("src");
+    heroImage.setAttribute("alt", "");
+    return;
+  }
+
+  heroImage.setAttribute("src", imageUrl);
+  heroImage.setAttribute("alt", imageAlt || "Hero background image");
+}
+
 const ORDERABLE_HOMEPAGE_SECTION_IDS = [
   "about",
   "menu",
@@ -951,6 +974,7 @@ function renderHotelContent() {
   setText("heroTitleLine2", hotel.hero?.titleLine2);
   setText("heroTitleLine3", hotel.hero?.titleLine3);
   setText("heroTagline", hotel.tagline);
+  renderHeroBackgroundImage(hotel.hero || {});
 
   renderHeroStats(hotel.hero?.stats || []);
 

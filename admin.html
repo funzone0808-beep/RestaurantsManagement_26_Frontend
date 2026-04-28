@@ -1433,9 +1433,42 @@ body {
       <input id="profileHeroLine3Input" placeholder="Optional supporting line" />
     </div>
     <div class="admin-field">
+      <label class="admin-field-label" for="profileHeroBackgroundImageUrlInput">Hero Background Image URL</label>
+      <input id="profileHeroBackgroundImageUrlInput" type="url" placeholder="https://... or uploaded path" />
+      <button id="profileHeroBackgroundImageUploadBtn" type="button" class="admin-tab">Upload Hero Background Image</button>
+      <p class="admin-field-hint">When 3D Hero Scene is disabled, this hotel-wise image is used in the hero background instead of the plain fallback gradient.</p>
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileHeroBackgroundImageAltInput">Hero Background Image Alt Text</label>
+      <input id="profileHeroBackgroundImageAltInput" placeholder="Describe the hero background image" />
+    </div>
+    <div class="admin-field">
       <label class="admin-field-label" for="profileHeroStatsInput">Hero Stats JSON</label>
       <textarea id="profileHeroStatsInput" rows="6" placeholder='[{"label":"Since","value":"1999"}]'></textarea>
       <p class="admin-field-hint">Keep this as a JSON array of small stat objects. Existing parser expects valid JSON here.</p>
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileHeroSceneTemplateInput">Hero Scene Template</label>
+      <select id="profileHeroSceneTemplateInput">
+        <option value="">Keep Current / Default</option>
+        <option value="default">Default Scene</option>
+        <option value="orbital">Orbital Scene</option>
+        <option value="sculptural">Sculptural Scene</option>
+        <option value="constellation">Constellation Scene</option>
+      </select>
+      <p class="admin-field-hint">Safe template selector for the hero scene family. Leaving this empty keeps the current/default scene path until a template is chosen.</p>
+    </div>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileHeroSceneModelPresetInput">Hero Food Model Preset</label>
+      <select id="profileHeroSceneModelPresetInput">
+        <option value="">Keep Current / None</option>
+        <option value="none">No Food Model</option>
+        <option value="coffee-cup">Coffee Cup</option>
+        <option value="plated-dish">Plated Dish</option>
+        <option value="dessert">Dessert</option>
+        <option value="service-cloche">Service Cloche</option>
+      </select>
+      <p class="admin-field-hint">Safe curated model-preset bridge for the next food-hero stage. In this step the current hero still remains the rendering fallback.</p>
     </div>
     <div class="admin-field">
       <label class="admin-field-label" for="profileHeroScenePresetInput">Hero Scene Preset</label>

@@ -19,6 +19,8 @@ const STAFF_BASE_API =
   window.APP_RUNTIME_CONFIG?.API_BASE_URL || getDefaultStaffApiBaseUrl();
 const STAFF_API_BASE = `${STAFF_BASE_API}/staff`;
 const STAFF_TOKEN_KEY = "hotel_platform_staff_token";
+const STAFF_SOUND_ALERT_ENABLED_KEY = "hotel_platform_staff_sound_alert_enabled";
+const STAFF_BROWSER_ALERT_ENABLED_KEY = "hotel_platform_staff_browser_alert_enabled";
 const STAFF_AUTO_REFRESH_INTERVAL_MS = 30 * 1000;
 const STAFF_STATE = {
   staffUser: null,
@@ -95,6 +97,10 @@ const STAFF_VIEW_META = {
 let staffAutoRefreshTimer = null;
 let staffAutoRefreshInFlight = false;
 let staffCompactViewport = window.innerWidth <= 1080;
+let staffAlertAudioContext = null;
+let staffSoundUnlocked = false;
+let staffLiveRefreshNoticeTimer = null;
+let staffLiveRefreshOverrideActive = false;
 
 function $(selector) {
   return document.querySelector(selector);
@@ -110,6 +116,237 @@ function setStaffToken(token) {
 
 function clearStaffToken() {
   localStorage.removeItem(STAFF_TOKEN_KEY);
+}
+
+function isStaffSoundAlertEnabled() {
+  return localStorage.getItem(STAFF_SOUND_ALERT_ENABLED_KEY) === "true";
+}
+
+function setStaffSoundAlertEnabled(enabled) {
+  localStorage.setItem(STAFF_SOUND_ALERT_ENABLED_KEY, enabled ? "true" : "false");
+}
+
+function isStaffBrowserAlertEnabled() {
+  return localStorage.getItem(STAFF_BROWSER_ALERT_ENABLED_KEY) === "true";
+}
+
+function setStaffBrowserAlertEnabled(enabled) {
+  localStorage.setItem(STAFF_BROWSER_ALERT_ENABLED_KEY, enabled ? "true" : "false");
+}
+
+function canUseStaffSoundAlerts() {
+  return (
+    typeof window !== "undefined" &&
+    (typeof window.AudioContext === "function" ||
+      typeof window.webkitAudioContext === "function")
+  );
+}
+
+function canUseStaffBrowserAlerts() {
+  return typeof window !== "undefined" && typeof window.Notification === "function";
+}
+
+function hasStaffBrowserAlertPermission() {
+  return canUseStaffBrowserAlerts() && window.Notification.permission === "granted";
+}
+
+function isStaffBrowserAlertActive() {
+  return isStaffBrowserAlertEnabled() && hasStaffBrowserAlertPermission();
+}
+
+function ensureStaffAlertAudioContext() {
+  if (staffAlertAudioContext || !canUseStaffSoundAlerts()) {
+    return staffAlertAudioContext;
+  }
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  staffAlertAudioContext = new AudioContextClass();
+  return staffAlertAudioContext;
+}
+
+async function unlockStaffSoundAlerts() {
+  const audioContext = ensureStaffAlertAudioContext();
+  if (!audioContext) return false;
+
+  try {
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+
+    staffSoundUnlocked = audioContext.state === "running";
+  } catch (error) {
+    console.warn("Staff sound alert unlock failed:", error);
+    staffSoundUnlocked = false;
+  }
+
+  return staffSoundUnlocked;
+}
+
+function updateStaffSoundAlertToggle() {
+  const button = $("#staffSoundAlertToggleBtn");
+  if (!button) return;
+
+  if (!canUseStaffSoundAlerts()) {
+    button.disabled = true;
+    button.textContent = "Sound unavailable";
+    button.setAttribute("aria-pressed", "false");
+    return;
+  }
+
+  const enabled = isStaffSoundAlertEnabled();
+  button.disabled = false;
+  button.textContent = enabled ? "Sound alerts on" : "Sound alerts off";
+  button.setAttribute("aria-pressed", String(enabled));
+}
+
+function updateStaffBrowserAlertToggle() {
+  const button = $("#staffBrowserAlertToggleBtn");
+  if (!button) return;
+
+  if (!canUseStaffBrowserAlerts()) {
+    button.disabled = true;
+    button.textContent = "Browser alerts unavailable";
+    button.setAttribute("aria-pressed", "false");
+    return;
+  }
+
+  const permission = window.Notification.permission;
+  if (permission === "denied") {
+    if (isStaffBrowserAlertEnabled()) {
+      setStaffBrowserAlertEnabled(false);
+    }
+
+    button.disabled = true;
+    button.textContent = "Browser alerts blocked";
+    button.setAttribute("aria-pressed", "false");
+    return;
+  }
+
+  const enabled = isStaffBrowserAlertEnabled() && permission === "granted";
+  button.disabled = false;
+  button.textContent = enabled ? "Browser alerts on" : "Browser alerts off";
+  button.setAttribute("aria-pressed", String(enabled));
+}
+
+async function ensureStaffBrowserAlertPermission() {
+  if (!canUseStaffBrowserAlerts()) return "denied";
+
+  if (window.Notification.permission === "granted") {
+    return "granted";
+  }
+
+  if (window.Notification.permission === "denied") {
+    return "denied";
+  }
+
+  try {
+    return await window.Notification.requestPermission();
+  } catch (error) {
+    console.warn("Staff browser alert permission request failed:", error);
+    return window.Notification.permission || "denied";
+  }
+}
+
+function playStaffAlertTone() {
+  const audioContext = ensureStaffAlertAudioContext();
+  if (!audioContext || !staffSoundUnlocked || !isStaffSoundAlertEnabled()) {
+    return false;
+  }
+
+  const now = audioContext.currentTime;
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(880, now);
+  oscillator.frequency.exponentialRampToValueAtTime(740, now + 0.18);
+
+  gainNode.gain.setValueAtTime(0.0001, now);
+  gainNode.gain.exponentialRampToValueAtTime(0.06, now + 0.02);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+
+  oscillator.start(now);
+  oscillator.stop(now + 0.24);
+  return true;
+}
+
+function getNewStaffRecords(previousRecords = [], nextRecords = []) {
+  if (!Array.isArray(previousRecords) || !Array.isArray(nextRecords) || !previousRecords.length) {
+    return [];
+  }
+
+  const previousIds = new Set(previousRecords.map(getStaffRecordId).filter(Boolean));
+  if (!previousIds.size) return [];
+
+  return nextRecords.filter((record) => {
+    const recordId = getStaffRecordId(record);
+    return recordId && !previousIds.has(recordId);
+  });
+}
+
+function showStaffOrderBrowserAlert(newOrders = []) {
+  if (
+    !Array.isArray(newOrders) ||
+    !newOrders.length ||
+    !document.hidden ||
+    !isStaffBrowserAlertActive()
+  ) {
+    return false;
+  }
+
+  const primaryOrder = newOrders[0] || {};
+  const sourceMeta = getStaffOrderSourceMeta(primaryOrder);
+  const totalLabel = formatMoney(getStaffOrderTotal(primaryOrder));
+  const customerLabel = primaryOrder.customerName || "Guest";
+  const detailParts = [customerLabel];
+
+  if (sourceMeta.detail) {
+    detailParts.push(sourceMeta.detail);
+  }
+
+  if (totalLabel) {
+    detailParts.push(totalLabel);
+  }
+
+  const title =
+    newOrders.length > 1
+      ? `${newOrders.length} new orders received`
+      : `New ${sourceMeta.label} order`;
+  const body =
+    newOrders.length > 1
+      ? `${detailParts.join(" • ")} • plus ${newOrders.length - 1} more`
+      : detailParts.join(" • ");
+
+  try {
+    const notification = new window.Notification(title, {
+      body,
+      tag: `staff-order-alert-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`,
+      renotify: true
+    });
+
+    notification.onclick = () => {
+      try {
+        window.focus();
+      } catch (error) {
+        console.warn("Staff browser alert focus failed:", error);
+      }
+
+      openStaffView("orders");
+      notification.close();
+    };
+
+    window.setTimeout(() => {
+      notification.close();
+    }, 12000);
+
+    return true;
+  } catch (error) {
+    console.warn("Staff browser alert failed:", error);
+    return false;
+  }
 }
 
 function resetStaffDashboardState() {
@@ -148,6 +385,26 @@ function setStaffLiveRefreshStatus(message = "Live updates on", mode = "live") {
   status.classList.toggle("is-live", mode === "live");
   status.classList.toggle("is-warning", mode === "warning");
   status.classList.toggle("is-muted", mode === "muted");
+}
+
+function flashStaffLiveRefreshNotice(
+  message = "New order detected",
+  mode = "warning",
+  durationMs = 6000
+) {
+  if (staffLiveRefreshNoticeTimer) {
+    window.clearTimeout(staffLiveRefreshNoticeTimer);
+    staffLiveRefreshNoticeTimer = null;
+  }
+
+  staffLiveRefreshOverrideActive = true;
+  setStaffLiveRefreshStatus(message, mode);
+
+  staffLiveRefreshNoticeTimer = window.setTimeout(() => {
+    staffLiveRefreshOverrideActive = false;
+    setStaffLiveRefreshStatus(`Updated ${formatStaffRefreshTime()}`, "live");
+    staffLiveRefreshNoticeTimer = null;
+  }, durationMs);
 }
 
 function setStaffSectionLastUpdated(selector, message = "") {
@@ -2329,6 +2586,8 @@ function showStaffDashboardView(staffUser = {}) {
   updateStaffWorkspaceHotelBadge(staffUser);
   updateStaffWorkspaceContext(STAFF_STATE.activeView || "dashboard");
   syncStaffSidebarForViewport();
+  updateStaffSoundAlertToggle();
+  updateStaffBrowserAlertToggle();
 }
 
 function showStaffView(view = "dashboard") {
@@ -2414,17 +2673,7 @@ function getStaffRecordId(record = {}) {
 }
 
 function hasNewStaffRecords(previousRecords = [], nextRecords = []) {
-  if (!Array.isArray(previousRecords) || !Array.isArray(nextRecords) || !previousRecords.length) {
-    return false;
-  }
-
-  const previousIds = new Set(previousRecords.map(getStaffRecordId).filter(Boolean));
-  if (!previousIds.size) return false;
-
-  return nextRecords.some((record) => {
-    const recordId = getStaffRecordId(record);
-    return recordId && !previousIds.has(recordId);
-  });
+  return getNewStaffRecords(previousRecords, nextRecords).length > 0;
 }
 
 function setStaffFormDisabled(form, isDisabled) {
@@ -2473,10 +2722,12 @@ function isStaffActionInProgress() {
 }
 
 async function refreshStaffOperationalData({ silent = false } = {}) {
+  const canRefreshWhileHidden = isStaffBrowserAlertActive();
+
   if (
     staffAutoRefreshInFlight ||
     !getStaffToken() ||
-    document.hidden ||
+    (document.hidden && !canRefreshWhileHidden) ||
     isStaffActionInProgress()
   ) {
     return;
@@ -2494,7 +2745,7 @@ async function refreshStaffOperationalData({ silent = false } = {}) {
       loadStaffSupportRequests({ silent })
     ]);
 
-    if (silent) {
+    if (silent && !staffLiveRefreshOverrideActive) {
       setStaffLiveRefreshStatus(`Updated ${formatStaffRefreshTime()}`, "live");
     }
   } catch (error) {
@@ -2509,7 +2760,16 @@ async function refreshStaffOperationalData({ silent = false } = {}) {
 }
 
 function stopStaffAutoRefresh() {
-  if (!staffAutoRefreshTimer) return;
+  if (staffLiveRefreshNoticeTimer) {
+    window.clearTimeout(staffLiveRefreshNoticeTimer);
+    staffLiveRefreshNoticeTimer = null;
+  }
+
+  staffLiveRefreshOverrideActive = false;
+  if (!staffAutoRefreshTimer) {
+    setStaffLiveRefreshStatus("Live updates off", "muted");
+    return;
+  }
 
   window.clearInterval(staffAutoRefreshTimer);
   staffAutoRefreshTimer = null;
@@ -2539,9 +2799,14 @@ async function loadStaffOrders({ silent = false } = {}) {
     const params = new URLSearchParams({ range });
     const result = await staffFetchJson(`${STAFF_API_BASE}/orders?${params.toString()}`);
     const nextOrders = Array.isArray(result.orders) ? result.orders : [];
+    const freshOrders = silent ? getNewStaffRecords(previousOrders, nextOrders) : [];
+    const hasFreshOrders = freshOrders.length > 0;
 
-    if (silent && hasNewStaffRecords(previousOrders, nextOrders)) {
+    if (hasFreshOrders) {
       markStaffFreshData("orders");
+      playStaffAlertTone();
+      flashStaffLiveRefreshNotice("New order detected", "warning");
+      showStaffOrderBrowserAlert(freshOrders);
     }
 
     STAFF_STATE.orders = nextOrders;
@@ -2997,6 +3262,8 @@ async function checkExistingStaffSession() {
     await loadStaffOrders();
     void loadStaffSupportRequests();
     startStaffAutoRefresh();
+    updateStaffSoundAlertToggle();
+    updateStaffBrowserAlertToggle();
     return true;
   } catch (error) {
     console.warn("Staff session invalid:", error);
@@ -3032,6 +3299,7 @@ function bindStaffLoginForm() {
     try {
       setStaffFormDisabled(form, true);
       setStaffLoginStatus("Checking staff access...");
+      void unlockStaffSoundAlerts();
 
       const result = await loginStaff(hotelSlug, pin);
       if (!result.token) {
@@ -3062,6 +3330,61 @@ function bindStaffLogout() {
     clearStaffToken();
     showStaffLoginView("Logged out.");
   });
+}
+
+function bindStaffSoundAlertToggle() {
+  const button = $("#staffSoundAlertToggleBtn");
+  if (!button || button.dataset.boundClick === "true") return;
+
+  updateStaffSoundAlertToggle();
+
+  button.addEventListener("click", async () => {
+    if (!canUseStaffSoundAlerts()) {
+      updateStaffSoundAlertToggle();
+      return;
+    }
+
+    await unlockStaffSoundAlerts();
+    const nextEnabled = !isStaffSoundAlertEnabled();
+    setStaffSoundAlertEnabled(nextEnabled);
+    updateStaffSoundAlertToggle();
+  });
+
+  button.dataset.boundClick = "true";
+}
+
+function bindStaffBrowserAlertToggle() {
+  const button = $("#staffBrowserAlertToggleBtn");
+  if (!button || button.dataset.boundClick === "true") return;
+
+  updateStaffBrowserAlertToggle();
+
+  button.addEventListener("click", async () => {
+    if (!canUseStaffBrowserAlerts()) {
+      updateStaffBrowserAlertToggle();
+      return;
+    }
+
+    if (isStaffBrowserAlertEnabled()) {
+      setStaffBrowserAlertEnabled(false);
+      updateStaffBrowserAlertToggle();
+      return;
+    }
+
+    const permission = await ensureStaffBrowserAlertPermission();
+    const enabled = permission === "granted";
+    setStaffBrowserAlertEnabled(enabled);
+    updateStaffBrowserAlertToggle();
+
+    if (!enabled) {
+      setStaffLiveRefreshStatus("Browser alerts blocked", "warning");
+      return;
+    }
+
+    setStaffLiveRefreshStatus("Browser alerts on", "live");
+  });
+
+  button.dataset.boundClick = "true";
 }
 
 function bindStaffOrderActions() {
@@ -3332,6 +3655,8 @@ async function initStaffOrdersPage() {
   prefillStaffHotelSlug();
   bindStaffLoginForm();
   bindStaffLogout();
+  bindStaffSoundAlertToggle();
+  bindStaffBrowserAlertToggle();
   bindStaffOrderActions();
   syncStaffSidebarForViewport();
   await checkExistingStaffSession();
