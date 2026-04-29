@@ -21,7 +21,7 @@ const STAFF_API_BASE = `${STAFF_BASE_API}/staff`;
 const STAFF_TOKEN_KEY = "hotel_platform_staff_token";
 const STAFF_SOUND_ALERT_ENABLED_KEY = "hotel_platform_staff_sound_alert_enabled";
 const STAFF_BROWSER_ALERT_ENABLED_KEY = "hotel_platform_staff_browser_alert_enabled";
-const STAFF_AUTO_REFRESH_INTERVAL_MS = 30 * 1000;
+const STAFF_AUTO_REFRESH_INTERVAL_MS = 15 * 1000;
 const STAFF_STATE = {
   staffUser: null,
   activeView: "dashboard",
@@ -43,6 +43,16 @@ const STAFF_RESERVATION_STATUS_OPTIONS = ["new", "confirmed", "seated", "complet
 const STAFF_INQUIRY_STATUS_OPTIONS = ["new", "contacted", "converted", "closed"];
 const STAFF_CONTACT_STATUS_OPTIONS = ["new", "contacted", "resolved", "closed", "archived"];
 const STAFF_SUPPORT_STATUS_OPTIONS = ["new", "acknowledged", "resolved", "closed"];
+const STAFF_MANAGER_VIEWS = [
+  "dashboard",
+  "orders",
+  "support",
+  "reservations",
+  "inquiries",
+  "contacts",
+  "testimonials"
+];
+const STAFF_BASIC_VIEWS = ["orders", "support"];
 const STAFF_ORDER_STATUS_LABELS = {
   new: "Received",
   confirmed: "Confirmed",
@@ -101,6 +111,29 @@ let staffAlertAudioContext = null;
 let staffSoundUnlocked = false;
 let staffLiveRefreshNoticeTimer = null;
 let staffLiveRefreshOverrideActive = false;
+let staffSoundRuntimeUnlockBound = false;
+let staffAutoRefreshSoundPlayed = false;
+let staffAutoRefreshFreshCounts = {};
+
+function normalizeStaffRoleValue(role = "") {
+  return String(role || "").trim().toLowerCase() === "owner" ? "owner" : "staff";
+}
+
+function isStaffManagerSession(staffUser = STAFF_STATE.staffUser || {}) {
+  return Boolean(staffUser?.isManager) || normalizeStaffRoleValue(staffUser?.role) === "owner";
+}
+
+function getAllowedStaffViews(staffUser = STAFF_STATE.staffUser || {}) {
+  return isStaffManagerSession(staffUser) ? STAFF_MANAGER_VIEWS : STAFF_BASIC_VIEWS;
+}
+
+function getDefaultStaffView(staffUser = STAFF_STATE.staffUser || {}) {
+  return isStaffManagerSession(staffUser) ? "dashboard" : "orders";
+}
+
+function canStaffAccessView(view = "", staffUser = STAFF_STATE.staffUser || {}) {
+  return getAllowedStaffViews(staffUser).includes(view);
+}
 
 function $(selector) {
   return document.querySelector(selector);
@@ -142,8 +175,24 @@ function canUseStaffSoundAlerts() {
   );
 }
 
-function canUseStaffBrowserAlerts() {
+function hasStaffBrowserAlertRuntime() {
   return typeof window !== "undefined" && typeof window.Notification === "function";
+}
+
+function isStaffBrowserAlertContextSupported() {
+  if (typeof window === "undefined") return false;
+
+  const hostname = window.location.hostname || "";
+  const isTrustedLocalHost =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.endsWith(".localhost");
+
+  return Boolean(window.isSecureContext) || isTrustedLocalHost;
+}
+
+function canUseStaffBrowserAlerts() {
+  return hasStaffBrowserAlertRuntime() && isStaffBrowserAlertContextSupported();
 }
 
 function hasStaffBrowserAlertPermission() {
@@ -182,6 +231,23 @@ async function unlockStaffSoundAlerts() {
   return staffSoundUnlocked;
 }
 
+function bindStaffSoundRuntimeUnlock() {
+  if (staffSoundRuntimeUnlockBound) return;
+
+  const unlockOnInteraction = () => {
+    if (!isStaffSoundAlertEnabled() || staffSoundUnlocked) {
+      return;
+    }
+
+    void unlockStaffSoundAlerts();
+  };
+
+  window.addEventListener("pointerdown", unlockOnInteraction, true);
+  window.addEventListener("keydown", unlockOnInteraction, true);
+  window.addEventListener("touchstart", unlockOnInteraction, true);
+  staffSoundRuntimeUnlockBound = true;
+}
+
 function updateStaffSoundAlertToggle() {
   const button = $("#staffSoundAlertToggleBtn");
   if (!button) return;
@@ -205,7 +271,9 @@ function updateStaffBrowserAlertToggle() {
 
   if (!canUseStaffBrowserAlerts()) {
     button.disabled = true;
-    button.textContent = "Browser alerts unavailable";
+    button.textContent = hasStaffBrowserAlertRuntime()
+      ? "Browser alerts need localhost/https"
+      : "Browser alerts unavailable";
     button.setAttribute("aria-pressed", "false");
     return;
   }
@@ -244,6 +312,43 @@ async function ensureStaffBrowserAlertPermission() {
   } catch (error) {
     console.warn("Staff browser alert permission request failed:", error);
     return window.Notification.permission || "denied";
+  }
+}
+
+function showStaffBrowserNotification(
+  title = "Staff alert",
+  body = "",
+  options = {}
+) {
+  if (!isStaffBrowserAlertActive()) {
+    return false;
+  }
+
+  try {
+    const notification = new window.Notification(title, {
+      body,
+      tag: options.tag || `staff-browser-alert-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`,
+      renotify: options.renotify !== false
+    });
+
+    if (typeof options.onClick === "function") {
+      notification.onclick = () => {
+        try {
+          options.onClick(notification);
+        } catch (error) {
+          console.warn("Staff browser alert click failed:", error);
+        }
+      };
+    }
+
+    window.setTimeout(() => {
+      notification.close();
+    }, options.durationMs || 12000);
+
+    return true;
+  } catch (error) {
+    console.warn("Staff browser alert failed:", error);
+    return false;
   }
 }
 
@@ -291,7 +396,6 @@ function showStaffOrderBrowserAlert(newOrders = []) {
   if (
     !Array.isArray(newOrders) ||
     !newOrders.length ||
-    !document.hidden ||
     !isStaffBrowserAlertActive()
   ) {
     return false;
@@ -320,14 +424,10 @@ function showStaffOrderBrowserAlert(newOrders = []) {
       ? `${detailParts.join(" • ")} • plus ${newOrders.length - 1} more`
       : detailParts.join(" • ");
 
-  try {
-    const notification = new window.Notification(title, {
-      body,
-      tag: `staff-order-alert-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`,
-      renotify: true
-    });
-
-    notification.onclick = () => {
+  return showStaffBrowserNotification(title, body, {
+    tag: `staff-order-alert-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`,
+    renotify: true,
+    onClick(notification) {
       try {
         window.focus();
       } catch (error) {
@@ -336,20 +436,216 @@ function showStaffOrderBrowserAlert(newOrders = []) {
 
       openStaffView("orders");
       notification.close();
+    }
+  });
+}
+
+function getStaffFreshViewLabel(view = "") {
+  return STAFF_VIEW_META[view]?.badge || "Updates";
+}
+
+function getStaffFreshNoticeMessage(view = "", freshCount = 0) {
+  const viewLabel = getStaffFreshViewLabel(view);
+  const itemLabelMap = {
+    orders: ["order", "orders"],
+    support: ["support request", "support requests"],
+    reservations: ["reservation", "reservations"],
+    inquiries: ["inquiry", "inquiries"],
+    contacts: ["contact message", "contact messages"],
+    testimonials: ["testimonial", "testimonials"]
+  };
+  const [singularLabel, pluralLabel] = itemLabelMap[view] || ["record", "records"];
+  const safeCount = Number(freshCount) || 0;
+
+  return safeCount > 1
+    ? `${safeCount} new ${pluralLabel} in ${viewLabel}`
+    : `New ${singularLabel} in ${viewLabel}`;
+}
+
+function getStaffBrowserAlertPayload(view = "", newRecords = []) {
+  if (!Array.isArray(newRecords) || !newRecords.length) {
+    return null;
+  }
+
+  const primaryRecord = newRecords[0] || {};
+  const count = newRecords.length;
+
+  if (view === "orders") {
+    const sourceMeta = getStaffOrderSourceMeta(primaryRecord);
+    const totalLabel = formatMoney(getStaffOrderTotal(primaryRecord));
+    const customerLabel = primaryRecord.customerName || "Guest";
+    const detailParts = [customerLabel];
+
+    if (sourceMeta.detail) {
+      detailParts.push(sourceMeta.detail);
+    }
+
+    if (totalLabel) {
+      detailParts.push(totalLabel);
+    }
+
+    return {
+      title: count > 1 ? `${count} new orders received` : `New ${sourceMeta.label} order`,
+      body: count > 1 ? `${detailParts.join(" | ")} | plus ${count - 1} more` : detailParts.join(" | "),
+      tag: `staff-order-alert-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`
     };
+  }
 
-    window.setTimeout(() => {
-      notification.close();
-    }, 12000);
+  if (view === "support") {
+    const requestType = normalizeStatus(primaryRecord.requestType) === "bill" ? "Bill request" : "Staff help";
+    const detailParts = [
+      requestType,
+      primaryRecord.tableNumber ? `Table ${primaryRecord.tableNumber}` : "",
+      primaryRecord.orderId ? `Order ${primaryRecord.orderId}` : ""
+    ].filter(Boolean);
 
-    return true;
-  } catch (error) {
-    console.warn("Staff browser alert failed:", error);
+    return {
+      title: count > 1 ? `${count} new support requests` : "New support request",
+      body: count > 1 ? `${detailParts.join(" | ")} | plus ${count - 1} more` : detailParts.join(" | "),
+      tag: `staff-support-alert-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`
+    };
+  }
+
+  if (view === "reservations") {
+    const detailParts = [
+      primaryRecord.name || "Guest",
+      primaryRecord.date || "",
+      primaryRecord.time || ""
+    ].filter(Boolean);
+
+    return {
+      title: count > 1 ? `${count} new reservations` : "New reservation",
+      body: count > 1 ? `${detailParts.join(" | ")} | plus ${count - 1} more` : detailParts.join(" | "),
+      tag: `staff-reservation-alert-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`
+    };
+  }
+
+  if (view === "inquiries") {
+    const detailParts = [
+      primaryRecord.name || "Guest",
+      primaryRecord.eventType || "Event inquiry",
+      primaryRecord.date || ""
+    ].filter(Boolean);
+
+    return {
+      title: count > 1 ? `${count} new inquiries` : "New inquiry",
+      body: count > 1 ? `${detailParts.join(" | ")} | plus ${count - 1} more` : detailParts.join(" | "),
+      tag: `staff-inquiry-alert-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`
+    };
+  }
+
+  if (view === "contacts") {
+    const detailParts = [
+      primaryRecord.name || "Guest",
+      primaryRecord.subject || "Website contact"
+    ].filter(Boolean);
+
+    return {
+      title: count > 1 ? `${count} new contact messages` : "New contact message",
+      body: count > 1 ? `${detailParts.join(" | ")} | plus ${count - 1} more` : detailParts.join(" | "),
+      tag: `staff-contact-alert-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`
+    };
+  }
+
+  if (view === "testimonials") {
+    const stars = Number.isFinite(Number(primaryRecord.stars))
+      ? `${Number(primaryRecord.stars)} star${Number(primaryRecord.stars) === 1 ? "" : "s"}`
+      : "";
+    const detailParts = [
+      primaryRecord.name || "Guest",
+      stars
+    ].filter(Boolean);
+
+    return {
+      title: count > 1 ? `${count} new testimonials` : "New testimonial",
+      body: count > 1 ? `${detailParts.join(" | ")} | plus ${count - 1} more` : detailParts.join(" | "),
+      tag: `staff-testimonial-alert-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`
+    };
+  }
+
+  return {
+    title: getStaffFreshNoticeMessage(view, count),
+    body: `${count} new record${count === 1 ? "" : "s"} available now.`,
+    tag: `staff-generic-alert-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`
+  };
+}
+
+function showStaffRecordBrowserAlert(view = "", newRecords = []) {
+  if (!Array.isArray(newRecords) || !newRecords.length || !isStaffBrowserAlertActive()) {
     return false;
   }
+
+  const payload = getStaffBrowserAlertPayload(view, newRecords);
+  if (!payload) {
+    return false;
+  }
+
+  return showStaffBrowserNotification(payload.title, payload.body, {
+    tag: payload.tag,
+    renotify: true,
+    onClick(notification) {
+      try {
+        window.focus();
+      } catch (error) {
+        console.warn("Staff browser alert focus failed:", error);
+      }
+
+      openStaffView(view || "orders");
+      notification.close();
+    }
+  });
+}
+
+function handleStaffFreshRecords(view = "", newRecords = [], { playSound = true } = {}) {
+  if (!Array.isArray(newRecords) || !newRecords.length) {
+    return false;
+  }
+
+  markStaffFreshData(view);
+  staffAutoRefreshFreshCounts[view] =
+    (Number(staffAutoRefreshFreshCounts[view]) || 0) + newRecords.length;
+
+  if (playSound && !staffAutoRefreshSoundPlayed) {
+    playStaffAlertTone();
+    staffAutoRefreshSoundPlayed = true;
+  }
+
+  showStaffRecordBrowserAlert(view, newRecords);
+  return true;
+}
+
+function resetStaffAutoRefreshFreshSummary() {
+  staffAutoRefreshFreshCounts = {};
+}
+
+function getStaffAutoRefreshFreshNoticeMessage() {
+  const freshEntries = Object.entries(staffAutoRefreshFreshCounts).filter(
+    ([, count]) => Number(count) > 0
+  );
+
+  if (!freshEntries.length) {
+    return "";
+  }
+
+  if (freshEntries.length === 1) {
+    const [view, count] = freshEntries[0];
+    return getStaffFreshNoticeMessage(view, count);
+  }
+
+  const viewLabels = freshEntries.map(([view]) => getStaffFreshViewLabel(view));
+
+  if (viewLabels.length === 2) {
+    return `New activity in ${viewLabels[0]} and ${viewLabels[1]}`;
+  }
+
+  const leadingLabels = viewLabels.slice(0, -1);
+  const lastLabel = viewLabels[viewLabels.length - 1];
+  return `New activity in ${leadingLabels.join(", ")}, and ${lastLabel}`;
 }
 
 function resetStaffDashboardState() {
+  resetStaffAutoRefreshFreshSummary();
+  STAFF_STATE.staffUser = null;
   STAFF_STATE.activeView = "dashboard";
   STAFF_STATE.orders = [];
   STAFF_STATE.dashboardReports = null;
@@ -363,6 +659,7 @@ function resetStaffDashboardState() {
   STAFF_STATE.inquiriesLoaded = false;
   STAFF_STATE.contactSubmissionsLoaded = false;
   STAFF_STATE.testimonialsLoaded = false;
+  applyStaffRoleWorkspaceAccess({});
   showStaffView("dashboard");
   setStaffDashboardSummaryEmpty("Login to load the dashboard summary.");
   setStaffSectionLastUpdated("#staffDashboardLastUpdated", "Not refreshed yet");
@@ -434,6 +731,79 @@ function updateStaffWorkspaceHotelBadge(staffUser = STAFF_STATE.staffUser || {})
   if (!badge) return;
 
   badge.textContent = `Hotel: ${staffUser?.hotelSlug || "this hotel"}`;
+}
+
+function updateStaffRoleWorkspaceCopy(staffUser = STAFF_STATE.staffUser || {}) {
+  const heroKicker = document.querySelector(".staff-dashboard-hero .staff-kicker");
+  const heroCopy = document.querySelector(".staff-dashboard-hero .staff-dashboard-copy");
+  const sidebarCopy = document.querySelector(".staff-sidebar-copy");
+  const sidebarNote = document.querySelector(".staff-sidebar-note .staff-hint");
+
+  if (isStaffManagerSession(staffUser)) {
+    if (heroKicker) heroKicker.textContent = "Owner Workspace";
+    if (heroCopy) {
+      heroCopy.textContent =
+        "A limited, hotel-scoped view for orders, billing, table support, reservations, inquiries, contact messages, and guest reviews. Open the section you need without leaving the workspace.";
+    }
+    if (sidebarCopy) {
+      sidebarCopy.textContent =
+        "Move between live hotel sections from one structured workspace while keeping the same limited hotel-scoped access model.";
+    }
+    if (sidebarNote) {
+      sidebarNote.textContent =
+        "Orders, reservations, inquiries, contacts, support requests, and testimonial moderation stay limited to the logged-in hotel only.";
+    }
+    return;
+  }
+
+  if (heroKicker) heroKicker.textContent = "Staff Workspace";
+  if (heroCopy) {
+    heroCopy.textContent =
+      "A focused, hotel-scoped view for live orders, billing actions, and table support. Keep day-to-day service moving without exposing manager reports or oversight sections.";
+  }
+  if (sidebarCopy) {
+    sidebarCopy.textContent =
+      "Move between live order and table-support sections while keeping this workspace focused on day-to-day hotel operations.";
+  }
+  if (sidebarNote) {
+    sidebarNote.textContent =
+      "Order records and table support stay limited to the logged-in hotel. Manager summaries and oversight sections stay hidden for this role.";
+  }
+}
+
+function applyStaffRoleWorkspaceAccess(staffUser = STAFF_STATE.staffUser || {}) {
+  const allowedViews = getAllowedStaffViews(staffUser);
+  const defaultView = getDefaultStaffView(staffUser);
+  const dashboardWrap = $("#staffDashboardWrap");
+  const sectionCount = document.querySelector(".staff-sidebar-section-count");
+
+  if (dashboardWrap) {
+    dashboardWrap.dataset.staffRole = normalizeStaffRoleValue(staffUser?.role);
+  }
+
+  document.querySelectorAll("[data-staff-view]").forEach((button) => {
+    const view = button.dataset.staffView || "";
+    const isAllowed = allowedViews.includes(view);
+    button.hidden = !isAllowed;
+    button.disabled = !isAllowed;
+    button.tabIndex = isAllowed ? 0 : -1;
+
+    if (!isAllowed) {
+      button.classList.remove("is-active", "has-fresh-data");
+      button.setAttribute("aria-selected", "false");
+    }
+  });
+
+  if (sectionCount) {
+    sectionCount.textContent = String(allowedViews.length);
+    sectionCount.setAttribute("aria-label", `${allowedViews.length} available sections`);
+  }
+
+  updateStaffRoleWorkspaceCopy(staffUser);
+
+  if (!canStaffAccessView(STAFF_STATE.activeView, staffUser)) {
+    STAFF_STATE.activeView = defaultView;
+  }
 }
 
 function isStaffCompactViewport() {
@@ -939,6 +1309,11 @@ function setStaffDashboardSummaryEmpty(
 }
 
 function renderStaffOrdersSummary(orders = []) {
+  if (!isStaffManagerSession()) {
+    setStaffDashboardSummaryEmpty("Manager access required for the dashboard summary.");
+    return;
+  }
+
   const summaryWrap = $("#staffDashboardSummary");
   const empty = $("#staffDashboardEmpty");
   if (!summaryWrap) return;
@@ -1023,6 +1398,13 @@ function renderStaffOrdersQuickReports(reports = STAFF_STATE.dashboardReports) {
   const reportsCopy = $("#staffOrdersReportsCopy");
   const reportsWrap = $("#staffOrdersReports");
   if (!reportsWrap) return;
+
+  if (!isStaffManagerSession()) {
+    if (reportsCopy) reportsCopy.hidden = true;
+    reportsWrap.hidden = true;
+    reportsWrap.innerHTML = "";
+    return;
+  }
 
   const hasReports = reports && typeof reports === "object";
   if (!hasReports) {
@@ -1281,6 +1663,12 @@ function getStaffOpenSupportRequestCount(supportRequests = STAFF_STATE.supportRe
 function renderStaffDashboardSupportSummary(supportRequests = []) {
   const summaryWrap = $("#staffDashboardSupportSummary");
   if (!summaryWrap) return;
+
+  if (!isStaffManagerSession()) {
+    summaryWrap.hidden = true;
+    summaryWrap.innerHTML = "";
+    return;
+  }
 
   if (!supportRequests.length) {
     summaryWrap.hidden = true;
@@ -2579,30 +2967,33 @@ function showStaffDashboardView(staffUser = {}) {
   const dashboardWrap = $("#staffDashboardWrap");
   const hotelLabel = $("#staffSessionHotel");
   STAFF_STATE.staffUser = staffUser;
+  applyStaffRoleWorkspaceAccess(staffUser);
 
   if (loginWrap) loginWrap.style.display = "none";
   if (dashboardWrap) dashboardWrap.style.display = "grid";
   if (hotelLabel) hotelLabel.textContent = staffUser.hotelSlug || "this hotel";
   updateStaffWorkspaceHotelBadge(staffUser);
-  updateStaffWorkspaceContext(STAFF_STATE.activeView || "dashboard");
+  showStaffView(STAFF_STATE.activeView || getDefaultStaffView(staffUser));
   syncStaffSidebarForViewport();
   updateStaffSoundAlertToggle();
   updateStaffBrowserAlertToggle();
 }
 
 function showStaffView(view = "dashboard") {
-  const supportedViews = ["dashboard", "orders", "support", "reservations", "inquiries", "contacts", "testimonials"];
-  const nextView = supportedViews.includes(view) ? view : "dashboard";
+  const nextView = canStaffAccessView(view) ? view : getDefaultStaffView();
   STAFF_STATE.activeView = nextView;
 
   document.querySelectorAll("[data-staff-view]").forEach((button) => {
+    if (button.hidden) return;
+
     const isActive = button.dataset.staffView === nextView;
     button.classList.toggle("is-active", isActive);
     button.setAttribute("aria-selected", String(isActive));
   });
 
   document.querySelectorAll("[data-staff-view-panel]").forEach((panel) => {
-    panel.hidden = panel.dataset.staffViewPanel !== nextView;
+    const panelView = panel.dataset.staffViewPanel || "";
+    panel.hidden = !canStaffAccessView(panelView) || panelView !== nextView;
   });
 
   updateStaffWorkspaceContext(nextView);
@@ -2625,29 +3016,30 @@ function markStaffFreshData(view = "") {
 }
 
 function openStaffView(view = "dashboard") {
-  showStaffView(view);
-  clearStaffFreshDataIndicator(view);
+  const nextView = canStaffAccessView(view) ? view : getDefaultStaffView();
+  showStaffView(nextView);
+  clearStaffFreshDataIndicator(nextView);
   if (isStaffCompactViewport()) {
     setStaffSidebarExpanded(false);
   }
 
-  if (view === "reservations" && !STAFF_STATE.reservationsLoaded) {
+  if (nextView === "reservations" && !STAFF_STATE.reservationsLoaded) {
     void loadStaffReservations();
   }
 
-  if (view === "support" && !STAFF_STATE.supportRequestsLoaded) {
+  if (nextView === "support" && !STAFF_STATE.supportRequestsLoaded) {
     void loadStaffSupportRequests();
   }
 
-  if (view === "inquiries" && !STAFF_STATE.inquiriesLoaded) {
+  if (nextView === "inquiries" && !STAFF_STATE.inquiriesLoaded) {
     void loadStaffInquiries();
   }
 
-  if (view === "contacts" && !STAFF_STATE.contactSubmissionsLoaded) {
+  if (nextView === "contacts" && !STAFF_STATE.contactSubmissionsLoaded) {
     void loadStaffContacts();
   }
 
-  if (view === "testimonials" && !STAFF_STATE.testimonialsLoaded) {
+  if (nextView === "testimonials" && !STAFF_STATE.testimonialsLoaded) {
     void loadStaffTestimonials();
   }
 }
@@ -2709,41 +3101,63 @@ async function staffFetchJson(url, options = {}) {
 }
 
 function isStaffActionInProgress() {
-  return Boolean(
-    document.querySelector(
-      [
-        "[data-staff-mark-billed]:disabled",
-        "[data-staff-mark-paid]:disabled",
-        "[data-staff-update-record-status]:disabled",
-        "[data-staff-toggle-testimonial-approval]:disabled"
-      ].join(",")
-    )
-  );
+  return Boolean(document.querySelector('[data-staff-action-busy="true"]'));
+}
+
+function setStaffActionBusyState(button, isBusy) {
+  if (!button) return;
+
+  if (isBusy) {
+    button.disabled = true;
+    button.dataset.staffActionBusy = "true";
+    return;
+  }
+
+  delete button.dataset.staffActionBusy;
 }
 
 async function refreshStaffOperationalData({ silent = false } = {}) {
-  const canRefreshWhileHidden = isStaffBrowserAlertActive();
-
   if (
     staffAutoRefreshInFlight ||
     !getStaffToken() ||
-    (document.hidden && !canRefreshWhileHidden) ||
     isStaffActionInProgress()
   ) {
     return;
   }
 
   staffAutoRefreshInFlight = true;
+  if (silent) {
+    staffAutoRefreshSoundPlayed = false;
+    resetStaffAutoRefreshFreshSummary();
+  }
 
   try {
     if (silent) {
       setStaffLiveRefreshStatus("Refreshing...", "muted");
     }
 
-    await Promise.all([
+    const refreshTasks = [
       loadStaffOrders({ silent }),
       loadStaffSupportRequests({ silent })
-    ]);
+    ];
+
+    if (isStaffManagerSession()) {
+      refreshTasks.push(
+        loadStaffReservations({ silent }),
+        loadStaffInquiries({ silent }),
+        loadStaffContacts({ silent }),
+        loadStaffTestimonials({ silent })
+      );
+    }
+
+    await Promise.all(refreshTasks);
+
+    if (silent) {
+      const freshNoticeMessage = getStaffAutoRefreshFreshNoticeMessage();
+      if (freshNoticeMessage) {
+        flashStaffLiveRefreshNotice(freshNoticeMessage, "warning");
+      }
+    }
 
     if (silent && !staffLiveRefreshOverrideActive) {
       setStaffLiveRefreshStatus(`Updated ${formatStaffRefreshTime()}`, "live");
@@ -2756,6 +3170,9 @@ async function refreshStaffOperationalData({ silent = false } = {}) {
     }
   } finally {
     staffAutoRefreshInFlight = false;
+    if (silent) {
+      resetStaffAutoRefreshFreshSummary();
+    }
   }
 }
 
@@ -2800,22 +3217,23 @@ async function loadStaffOrders({ silent = false } = {}) {
     const result = await staffFetchJson(`${STAFF_API_BASE}/orders?${params.toString()}`);
     const nextOrders = Array.isArray(result.orders) ? result.orders : [];
     const freshOrders = silent ? getNewStaffRecords(previousOrders, nextOrders) : [];
-    const hasFreshOrders = freshOrders.length > 0;
-
-    if (hasFreshOrders) {
-      markStaffFreshData("orders");
-      playStaffAlertTone();
-      flashStaffLiveRefreshNotice("New order detected", "warning");
-      showStaffOrderBrowserAlert(freshOrders);
-    }
+    handleStaffFreshRecords("orders", freshOrders);
 
     STAFF_STATE.orders = nextOrders;
     updateStaffOrderTableFilterOptions(STAFF_STATE.orders);
     updateStaffViewTabCounts();
     renderStaffOrdersSummary(STAFF_STATE.orders);
     renderCurrentStaffOrders();
-    await loadStaffDashboardReports({ silent: true });
-    setStaffSectionLastUpdated("#staffDashboardLastUpdated", getStaffLastUpdatedLabel());
+
+    if (isStaffManagerSession()) {
+      await loadStaffDashboardReports({ silent: true });
+      setStaffSectionLastUpdated("#staffDashboardLastUpdated", getStaffLastUpdatedLabel());
+    } else {
+      STAFF_STATE.dashboardReports = null;
+      renderStaffOrdersQuickReports(null);
+      setStaffSectionLastUpdated("#staffDashboardLastUpdated", "Manager access required");
+    }
+
     setStaffSectionLastUpdated("#staffOrdersLastUpdated", getStaffLastUpdatedLabel());
   } catch (error) {
     console.error("Staff orders load failed:", error);
@@ -2829,6 +3247,13 @@ async function loadStaffOrders({ silent = false } = {}) {
 }
 
 async function loadStaffDashboardReports({ silent = false } = {}) {
+  if (!isStaffManagerSession()) {
+    STAFF_STATE.dashboardReports = null;
+    renderStaffDashboardReports(null);
+    renderStaffOrdersQuickReports(null);
+    return;
+  }
+
   try {
     const result = await staffFetchJson(`${STAFF_API_BASE}/orders-reports`);
     STAFF_STATE.dashboardReports =
@@ -2847,76 +3272,115 @@ async function loadStaffDashboardReports({ silent = false } = {}) {
   }
 }
 
-async function loadStaffReservations() {
+async function loadStaffReservations({ silent = false } = {}) {
   const range = $("#staffReservationsRangeInput")?.value || "recent";
+  const previousReservations = STAFF_STATE.reservations;
 
   try {
-    clearStaffRecordSummary("#staffReservationsSummary");
-    setStaffRecordsLoading("#staffReservationsContent", "Loading reservations...");
+    if (!silent) {
+      clearStaffFreshDataIndicator("reservations");
+      clearStaffRecordSummary("#staffReservationsSummary");
+      setStaffRecordsLoading("#staffReservationsContent", "Loading reservations...");
+    }
     const params = new URLSearchParams({ range });
     const result = await staffFetchJson(`${STAFF_API_BASE}/reservations?${params.toString()}`);
-    STAFF_STATE.reservations = Array.isArray(result.reservations)
+    const nextReservations = Array.isArray(result.reservations)
       ? result.reservations
       : [];
+    handleStaffFreshRecords(
+      "reservations",
+      silent ? getNewStaffRecords(previousReservations, nextReservations) : []
+    );
+    STAFF_STATE.reservations = nextReservations;
     STAFF_STATE.reservationsLoaded = true;
     updateStaffViewTabCounts();
     renderCurrentStaffReservations();
   } catch (error) {
     console.error("Staff reservations load failed:", error);
-    clearStaffRecordSummary("#staffReservationsSummary");
-    setStaffRecordsLoading(
-      "#staffReservationsContent",
-      error.message || "Failed to load staff reservations.",
-      false
-    );
+    if (!silent) {
+      clearStaffRecordSummary("#staffReservationsSummary");
+      setStaffRecordsLoading(
+        "#staffReservationsContent",
+        error.message || "Failed to load staff reservations.",
+        false
+      );
+    } else {
+      throw error;
+    }
   }
 }
 
-async function loadStaffInquiries() {
+async function loadStaffInquiries({ silent = false } = {}) {
   const range = $("#staffInquiriesRangeInput")?.value || "recent";
+  const previousInquiries = STAFF_STATE.inquiries;
 
   try {
-    clearStaffRecordSummary("#staffInquiriesSummary");
-    setStaffRecordsLoading("#staffInquiriesContent", "Loading inquiries...");
+    if (!silent) {
+      clearStaffFreshDataIndicator("inquiries");
+      clearStaffRecordSummary("#staffInquiriesSummary");
+      setStaffRecordsLoading("#staffInquiriesContent", "Loading inquiries...");
+    }
     const params = new URLSearchParams({ range });
     const result = await staffFetchJson(`${STAFF_API_BASE}/inquiries?${params.toString()}`);
-    STAFF_STATE.inquiries = Array.isArray(result.inquiries) ? result.inquiries : [];
+    const nextInquiries = Array.isArray(result.inquiries) ? result.inquiries : [];
+    handleStaffFreshRecords(
+      "inquiries",
+      silent ? getNewStaffRecords(previousInquiries, nextInquiries) : []
+    );
+    STAFF_STATE.inquiries = nextInquiries;
     STAFF_STATE.inquiriesLoaded = true;
     updateStaffViewTabCounts();
     renderCurrentStaffInquiries();
   } catch (error) {
     console.error("Staff inquiries load failed:", error);
-    clearStaffRecordSummary("#staffInquiriesSummary");
-    setStaffRecordsLoading(
-      "#staffInquiriesContent",
-      error.message || "Failed to load staff inquiries.",
-      false
-    );
+    if (!silent) {
+      clearStaffRecordSummary("#staffInquiriesSummary");
+      setStaffRecordsLoading(
+        "#staffInquiriesContent",
+        error.message || "Failed to load staff inquiries.",
+        false
+      );
+    } else {
+      throw error;
+    }
   }
 }
 
-async function loadStaffContacts() {
+async function loadStaffContacts({ silent = false } = {}) {
   const range = $("#staffContactsRangeInput")?.value || "recent";
+  const previousContacts = STAFF_STATE.contactSubmissions;
 
   try {
-    clearStaffRecordSummary("#staffContactsSummary");
-    setStaffRecordsLoading("#staffContactsContent", "Loading contact messages...");
+    if (!silent) {
+      clearStaffFreshDataIndicator("contacts");
+      clearStaffRecordSummary("#staffContactsSummary");
+      setStaffRecordsLoading("#staffContactsContent", "Loading contact messages...");
+    }
     const params = new URLSearchParams({ range });
     const result = await staffFetchJson(`${STAFF_API_BASE}/contact-submissions?${params.toString()}`);
-    STAFF_STATE.contactSubmissions = Array.isArray(result.contactSubmissions)
+    const nextContacts = Array.isArray(result.contactSubmissions)
       ? result.contactSubmissions
       : [];
+    handleStaffFreshRecords(
+      "contacts",
+      silent ? getNewStaffRecords(previousContacts, nextContacts) : []
+    );
+    STAFF_STATE.contactSubmissions = nextContacts;
     STAFF_STATE.contactSubmissionsLoaded = true;
     updateStaffViewTabCounts();
     renderCurrentStaffContacts();
   } catch (error) {
     console.error("Staff contact submissions load failed:", error);
-    clearStaffRecordSummary("#staffContactsSummary");
-    setStaffRecordsLoading(
-      "#staffContactsContent",
-      error.message || "Failed to load staff contact messages.",
-      false
-    );
+    if (!silent) {
+      clearStaffRecordSummary("#staffContactsSummary");
+      setStaffRecordsLoading(
+        "#staffContactsContent",
+        error.message || "Failed to load staff contact messages.",
+        false
+      );
+    } else {
+      throw error;
+    }
   }
 }
 
@@ -2938,9 +3402,10 @@ async function loadStaffSupportRequests({ silent = false } = {}) {
       ? result.supportRequests
       : [];
 
-    if (silent && hasNewStaffRecords(previousSupportRequests, nextSupportRequests)) {
-      markStaffFreshData("support");
-    }
+    handleStaffFreshRecords(
+      "support",
+      silent ? getNewStaffRecords(previousSupportRequests, nextSupportRequests) : []
+    );
 
     STAFF_STATE.supportRequests = nextSupportRequests;
     STAFF_STATE.supportRequestsLoaded = true;
@@ -2966,26 +3431,39 @@ async function loadStaffSupportRequests({ silent = false } = {}) {
   }
 }
 
-async function loadStaffTestimonials() {
+async function loadStaffTestimonials({ silent = false } = {}) {
   const range = $("#staffTestimonialsRangeInput")?.value || "recent";
+  const previousTestimonials = STAFF_STATE.testimonials;
 
   try {
-    clearStaffRecordSummary("#staffTestimonialsSummary");
-    setStaffRecordsLoading("#staffTestimonialsContent", "Loading testimonials...");
+    if (!silent) {
+      clearStaffFreshDataIndicator("testimonials");
+      clearStaffRecordSummary("#staffTestimonialsSummary");
+      setStaffRecordsLoading("#staffTestimonialsContent", "Loading testimonials...");
+    }
     const params = new URLSearchParams({ range });
     const result = await staffFetchJson(`${STAFF_API_BASE}/testimonials?${params.toString()}`);
-    STAFF_STATE.testimonials = Array.isArray(result.testimonials) ? result.testimonials : [];
+    const nextTestimonials = Array.isArray(result.testimonials) ? result.testimonials : [];
+    handleStaffFreshRecords(
+      "testimonials",
+      silent ? getNewStaffRecords(previousTestimonials, nextTestimonials) : []
+    );
+    STAFF_STATE.testimonials = nextTestimonials;
     STAFF_STATE.testimonialsLoaded = true;
     updateStaffViewTabCounts();
     renderCurrentStaffTestimonials();
   } catch (error) {
     console.error("Staff testimonials load failed:", error);
-    clearStaffRecordSummary("#staffTestimonialsSummary");
-    setStaffRecordsLoading(
-      "#staffTestimonialsContent",
-      error.message || "Failed to load staff testimonials.",
-      false
-    );
+    if (!silent) {
+      clearStaffRecordSummary("#staffTestimonialsSummary");
+      setStaffRecordsLoading(
+        "#staffTestimonialsContent",
+        error.message || "Failed to load staff testimonials.",
+        false
+      );
+    } else {
+      throw error;
+    }
   }
 }
 
@@ -3095,15 +3573,17 @@ async function handleStaffOrderAction(button, action, actionLabel) {
   const originalText = button.textContent;
 
   try {
-    button.disabled = true;
+    setStaffActionBusyState(button, true);
     button.textContent = "Updating...";
     await patchStaffOrderAction(orderId, action);
     await loadStaffOrders();
   } catch (error) {
     console.error(`Staff ${action} failed:`, error);
     window.alert(error.message || `Failed to ${actionLabel.toLowerCase()}`);
-    button.disabled = false;
     button.textContent = originalText;
+    button.disabled = false;
+  } finally {
+    setStaffActionBusyState(button, false);
   }
 }
 
@@ -3170,7 +3650,7 @@ async function handleStaffRecordStatusAction(button) {
   const originalText = button.textContent;
 
   try {
-    button.disabled = true;
+    setStaffActionBusyState(button, true);
     button.textContent = "Updating...";
     await patchStaffRecordStatus(recordType, recordId, status);
 
@@ -3188,8 +3668,10 @@ async function handleStaffRecordStatusAction(button) {
   } catch (error) {
     console.error(`Staff ${recordType} status update failed:`, error);
     window.alert(error.message || "Failed to update status");
-    button.disabled = false;
     button.textContent = originalText;
+    updateStaffRecordStatusButtonState(select);
+  } finally {
+    setStaffActionBusyState(button, false);
   }
 }
 
@@ -3218,15 +3700,17 @@ async function handleStaffTestimonialApprovalAction(button) {
   const originalText = button.textContent;
 
   try {
-    button.disabled = true;
+    setStaffActionBusyState(button, true);
     button.textContent = "Updating...";
     await patchStaffTestimonialApproval(testimonialId, nextApproved);
     await loadStaffTestimonials();
   } catch (error) {
     console.error("Staff testimonial approval update failed:", error);
     window.alert(error.message || "Failed to update testimonial approval");
-    button.disabled = false;
     button.textContent = originalText;
+    button.disabled = false;
+  } finally {
+    setStaffActionBusyState(button, false);
   }
 }
 
@@ -3344,10 +3828,23 @@ function bindStaffSoundAlertToggle() {
       return;
     }
 
-    await unlockStaffSoundAlerts();
     const nextEnabled = !isStaffSoundAlertEnabled();
     setStaffSoundAlertEnabled(nextEnabled);
+    const unlocked = nextEnabled ? await unlockStaffSoundAlerts() : staffSoundUnlocked;
     updateStaffSoundAlertToggle();
+
+    if (!nextEnabled) {
+      setStaffLiveRefreshStatus("Sound alerts off", "muted");
+      return;
+    }
+
+    if (!unlocked) {
+      setStaffLiveRefreshStatus("Tap once to arm sound alerts", "warning");
+      return;
+    }
+
+    playStaffAlertTone();
+    setStaffLiveRefreshStatus("Sound alerts on", "live");
   });
 
   button.dataset.boundClick = "true";
@@ -3368,6 +3865,7 @@ function bindStaffBrowserAlertToggle() {
     if (isStaffBrowserAlertEnabled()) {
       setStaffBrowserAlertEnabled(false);
       updateStaffBrowserAlertToggle();
+      setStaffLiveRefreshStatus("Browser alerts off", "muted");
       return;
     }
 
@@ -3381,6 +3879,24 @@ function bindStaffBrowserAlertToggle() {
       return;
     }
 
+    showStaffBrowserNotification(
+      "Staff browser alerts enabled",
+      "New hotel orders will now trigger browser alerts for this workspace.",
+      {
+        tag: `staff-browser-alert-preview-${STAFF_STATE.staffUser?.hotelSlug || "hotel"}`,
+        renotify: false,
+        durationMs: 8000,
+        onClick(notification) {
+          try {
+            window.focus();
+          } catch (error) {
+            console.warn("Staff browser alert preview focus failed:", error);
+          }
+
+          notification.close();
+        }
+      }
+    );
     setStaffLiveRefreshStatus("Browser alerts on", "live");
   });
 
@@ -3653,6 +4169,7 @@ function bindStaffOrderActions() {
 
 async function initStaffOrdersPage() {
   prefillStaffHotelSlug();
+  bindStaffSoundRuntimeUnlock();
   bindStaffLoginForm();
   bindStaffLogout();
   bindStaffSoundAlertToggle();
