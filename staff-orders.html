@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="app-backend-base-url" content="" />
+  <meta name="app-api-base-url" content="" />
+  <meta name="app-allow-order-whatsapp-fallback-on-save-failure" content="" />
+  <meta name="app-open-whatsapp-after-verified-online-payment" content="" />
   <title>Staff Orders</title>
 <style>
 :root {
@@ -1222,6 +1226,230 @@ linear-gradient(135deg, rgba(255, 255, 255, 0.34), transparent 36%),
 radial-gradient(circle at top right, rgba(139, 67, 88, 0.12), transparent 10rem);
 }
 
+.staff-ai-insights-card {
+position: relative;
+margin-top: 14px;
+padding: 22px;
+border: 1px solid rgba(133, 86, 49, 0.16);
+border-radius: 24px;
+background:
+radial-gradient(circle at top right, rgba(201, 152, 79, 0.16), transparent 12rem),
+linear-gradient(160deg, rgba(255, 251, 245, 0.90), rgba(248, 239, 229, 0.96));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.92),
+0 18px 36px rgba(115, 77, 46, 0.08);
+overflow: hidden;
+}
+
+.staff-ai-insights-card::before {
+content: "";
+position: absolute;
+inset: 0;
+pointer-events: none;
+background:
+linear-gradient(135deg, rgba(255, 255, 255, 0.34), transparent 36%),
+radial-gradient(circle at 85% 16%, rgba(132, 72, 90, 0.10), transparent 10rem);
+}
+
+.staff-ai-insights-card > * {
+position: relative;
+z-index: 1;
+}
+
+.staff-ai-insights-head {
+display: flex;
+align-items: flex-start;
+justify-content: space-between;
+gap: 16px;
+}
+
+.staff-ai-insights-kicker {
+display: inline-flex;
+width: fit-content;
+margin: 0;
+padding: 7px 10px;
+border-radius: 999px;
+border: 1px solid rgba(133, 86, 49, 0.10);
+background: rgba(255, 249, 242, 0.84);
+box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+color: var(--staff-muted);
+font-size: 11px;
+font-weight: 900;
+letter-spacing: 0.12em;
+text-transform: uppercase;
+}
+
+.staff-ai-insights-title {
+margin: 12px 0 0;
+color: var(--staff-text-strong);
+font-size: clamp(24px, 3vw, 30px);
+font-weight: 600;
+letter-spacing: -0.03em;
+line-height: 1.05;
+}
+
+.staff-ai-insights-note {
+max-width: 34ch;
+margin: 4px 0 0;
+color: var(--staff-muted);
+font-size: 13px;
+line-height: 1.6;
+text-align: right;
+}
+
+.staff-ai-insights-meta {
+display: grid;
+justify-items: end;
+gap: 8px;
+}
+
+.staff-ai-insights-confidence {
+max-width: 34ch;
+margin: 0;
+padding: 8px 10px;
+border-radius: 14px;
+border: 1px solid rgba(133, 86, 49, 0.12);
+background: rgba(255, 250, 244, 0.8);
+color: var(--staff-text-strong);
+font-size: 12px;
+font-weight: 600;
+line-height: 1.5;
+text-align: right;
+}
+
+.staff-ai-insights-freshness {
+max-width: 34ch;
+margin: 0;
+color: var(--staff-muted);
+font-size: 12px;
+line-height: 1.5;
+text-align: right;
+}
+
+.staff-ai-insights-list {
+display: grid;
+gap: 12px;
+margin: 18px 0 0;
+padding: 0;
+list-style: none;
+}
+
+.staff-ai-insights-item {
+display: grid;
+gap: 4px;
+padding: 14px 16px;
+border: 1px solid rgba(133, 86, 49, 0.10);
+border-radius: 18px;
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(250, 244, 236, 0.82));
+}
+
+.staff-ai-insights-item.is-featured {
+border-color: rgba(183, 130, 56, 0.28);
+background:
+linear-gradient(180deg, rgba(255, 252, 246, 0.92), rgba(249, 239, 223, 0.9));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.92),
+0 10px 24px rgba(140, 96, 46, 0.08);
+}
+
+.staff-ai-insights-item-head {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 10px;
+}
+
+.staff-ai-insights-item-label {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: 13px;
+font-weight: 700;
+letter-spacing: 0.01em;
+}
+
+.staff-ai-insights-item-badge {
+display: inline-flex;
+align-items: center;
+padding: 5px 8px;
+border-radius: 999px;
+border: 1px solid rgba(183, 130, 56, 0.2);
+background: rgba(255, 248, 235, 0.95);
+color: #7c541f;
+font-size: 10px;
+font-weight: 800;
+letter-spacing: 0.08em;
+text-transform: uppercase;
+white-space: nowrap;
+}
+
+.staff-ai-insights-item-copy {
+margin: 0;
+color: var(--staff-muted);
+font-size: 13px;
+line-height: 1.62;
+}
+
+.staff-item-sales-grid {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.staff-item-sales-card {
+min-height: 0;
+}
+
+.staff-item-sales-card::before {
+background:
+linear-gradient(135deg, rgba(255, 255, 255, 0.34), transparent 36%),
+radial-gradient(circle at top right, rgba(125, 143, 99, 0.12), transparent 10rem);
+}
+
+.staff-item-sales-card.is-low-selling::before {
+background:
+linear-gradient(135deg, rgba(255, 255, 255, 0.34), transparent 36%),
+radial-gradient(circle at top right, rgba(201, 116, 82, 0.12), transparent 10rem);
+}
+
+.staff-item-sales-period {
+margin: 0;
+color: var(--staff-muted);
+font-size: 12px;
+line-height: 1.55;
+}
+
+.staff-item-sales-list {
+display: grid;
+gap: 10px;
+margin: 16px 0 0;
+padding: 0;
+list-style: none;
+}
+
+.staff-item-sales-row {
+display: grid;
+gap: 4px;
+padding: 12px 14px;
+border: 1px solid rgba(133, 86, 49, 0.10);
+border-radius: 16px;
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(249, 242, 233, 0.82));
+}
+
+.staff-item-sales-name {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: 14px;
+font-weight: 700;
+line-height: 1.45;
+}
+
+.staff-item-sales-copy {
+margin: 0;
+color: var(--staff-muted);
+font-size: 12px;
+line-height: 1.58;
+}
+
 .staff-summary-card > * {
 position: relative;
 z-index: 1;
@@ -2054,6 +2282,10 @@ padding-left: 18px;
         <p id="staffDashboardEmpty" class="staff-empty">Login to load the dashboard summary.</p>
         <p id="staffDashboardReportsCopy" class="staff-section-copy" hidden>Quick daily, weekly, and monthly order reports for this hotel.</p>
         <div id="staffDashboardReports" class="staff-summary-grid" hidden></div>
+        <p id="staffDashboardAiInsightsCopy" class="staff-section-copy" hidden>Read-only manager insights grounded only in the report cards already loaded for this hotel.</p>
+        <section id="staffDashboardAiInsights" class="staff-ai-insights-card" hidden aria-label="Manager AI insights"></section>
+        <p id="staffDashboardItemSalesCopy" class="staff-section-copy" hidden>Read-only sold-item patterns from hotel-scoped saved orders. Low-selling currently means low among items that were actually sold in the selected report window.</p>
+        <div id="staffDashboardItemSales" class="staff-summary-grid staff-item-sales-grid" hidden></div>
         <div id="staffDashboardSupportSummary" class="staff-summary-grid" hidden></div>
 
         <div class="staff-dashboard-shortcuts" aria-label="Dashboard shortcuts">

@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="referrer" content="no-referrer" />
+  <meta name="app-backend-base-url" content="" />
+  <meta name="app-api-base-url" content="" />
+  <meta name="app-allow-order-whatsapp-fallback-on-save-failure" content="" />
+  <meta name="app-open-whatsapp-after-verified-online-payment" content="" />
   <title>Track Your Order</title>
   <meta name="description" content="Track your hotel food order status securely." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -290,11 +294,78 @@
         </div>
       </section>
 
+      <section id="trackingSmartWaiter" class="tracking-card tracking-smart-waiter" hidden aria-label="Smart Waiter tracking help">
+        <div class="tracking-smart-waiter__head">
+          <div>
+            <p class="section-eyebrow">Smart Waiter</p>
+            <h2>Tracking help</h2>
+            <p id="trackingSmartWaiterIntro" class="tracking-smart-waiter__intro">
+              Ask safe read-only questions about this tracked order.
+            </p>
+          </div>
+          <span id="trackingSmartWaiterPill" class="tracking-pill">Read only</span>
+        </div>
+
+        <div id="trackingSmartWaiterPrompts" class="tracking-smart-waiter__prompts" role="group" aria-label="Smart Waiter tracking questions">
+          <button type="button" class="tracking-smart-waiter__chip" data-tracking-assistant-prompt="What is my order status?">
+            What is my order status?
+          </button>
+          <button type="button" class="tracking-smart-waiter__chip" data-tracking-assistant-prompt="Can I add more items?">
+            Can I add more items?
+          </button>
+          <button type="button" class="tracking-smart-waiter__chip" data-tracking-assistant-prompt="Is my bill ready?">
+            Is my bill ready?
+          </button>
+          <button type="button" class="tracking-smart-waiter__chip" data-tracking-assistant-prompt="How do I request the bill?">
+            How do I request the bill?
+          </button>
+          <button type="button" class="tracking-smart-waiter__chip" data-tracking-assistant-prompt="How do I call staff?">
+            How do I call staff?
+          </button>
+        </div>
+        <p id="trackingSmartWaiterPromptHint" class="tracking-smart-waiter__prompt-hint" hidden></p>
+
+        <p id="trackingSmartWaiterStatus" class="tracking-smart-waiter__status" aria-live="polite">
+          Smart Waiter is ready for safe tracking questions.
+        </p>
+
+        <div id="trackingSmartWaiterReply" class="tracking-smart-waiter__reply" hidden>
+          <p id="trackingSmartWaiterAnswer" class="tracking-smart-waiter__answer"></p>
+          <p id="trackingSmartWaiterDisclaimer" class="tracking-smart-waiter__disclaimer"></p>
+        </div>
+
+        <div id="trackingSmartWaiterFollowUps" class="tracking-smart-waiter__followups" hidden aria-label="Smart Waiter follow-up questions"></div>
+        <div id="trackingSmartWaiterHelpers" class="tracking-smart-waiter__helpers" hidden aria-label="Smart Waiter control suggestions"></div>
+        <section id="trackingSmartWaiterPreview" class="tracking-smart-waiter__preview" hidden aria-label="Future Smart Waiter confirmation preview">
+          <p class="tracking-smart-waiter__preview-kicker">Future confirmed request preview</p>
+          <h3 id="trackingSmartWaiterPreviewTitle" class="tracking-smart-waiter__preview-title"></h3>
+          <p id="trackingSmartWaiterPreviewMessage" class="tracking-smart-waiter__preview-message"></p>
+          <div class="tracking-smart-waiter__preview-actions" aria-hidden="true">
+            <button
+              type="button"
+              id="trackingSmartWaiterPreviewConfirm"
+              class="tracking-smart-waiter__preview-btn tracking-smart-waiter__preview-btn--primary"
+              disabled
+            ></button>
+            <button
+              type="button"
+              id="trackingSmartWaiterPreviewCancel"
+              class="tracking-smart-waiter__preview-btn tracking-smart-waiter__preview-btn--secondary"
+              disabled
+            ></button>
+          </div>
+          <p class="tracking-smart-waiter__preview-note">
+            Preview only. Smart Waiter still does not send bill or staff-help requests from here.
+          </p>
+        </section>
+      </section>
+
       <section id="trackingMessage" class="tracking-card tracking-message" hidden aria-live="polite"></section>
     </main>
   </div>
 
   <script src="js/app-config.js"></script>
+  <script src="js/assistant-action-bridge.js"></script>
   <script src="js/order-tracking.js"></script>
 </body>
 </html>

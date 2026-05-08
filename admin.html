@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="app-backend-base-url" content="" />
+  <meta name="app-api-base-url" content="" />
+  <meta name="app-allow-order-whatsapp-fallback-on-save-failure" content="" />
+  <meta name="app-open-whatsapp-after-verified-online-payment" content="" />
   <title>Admin Dashboard</title>
   <!-- <link rel="stylesheet" href="css/style.css" /> -->
   <style>
@@ -1370,7 +1374,40 @@ body {
       <label class="admin-field-label" for="profileThemeLoadingTextColorInput">Loader Text Color</label>
       <input id="profileThemeLoadingTextColorInput" placeholder="rgba(255,255,255,0.8)" />
     </div>
-    <p class="admin-sub">Safe visibility toggles are limited to about, events, reservation, gallery, and testimonials for now.</p>
+    <h4>Smart Waiter (Safe Controls)</h4>
+    <p class="admin-sub">Use this only to turn the public menu assistant on or off for this hotel, and to adjust its public heading/copy. It does not change ordering, payment, or staff flows.</p>
+    <label>
+      <input id="profileThemeAiAssistantEnabledInput" type="checkbox" checked />
+      Enable Smart Waiter for this hotel
+    </label>
+    <div class="admin-field">
+      <label class="admin-field-label" for="profileThemeAiAssistantTitleInput">Smart Waiter Title</label>
+      <input id="profileThemeAiAssistantTitleInput" maxlength="160" placeholder="Ask about dishes, budget, and combos" />
+    </div>
+      <div class="admin-field">
+        <label class="admin-field-label" for="profileThemeAiAssistantIntroInput">Smart Waiter Intro</label>
+        <input id="profileThemeAiAssistantIntroInput" maxlength="320" placeholder="This helper answers only from the current hotel's live menu and can suggest safe actions like add to cart." />
+      </div>
+      <div class="admin-field">
+        <label class="admin-field-label" for="profileThemeAiAssistantToneInput">Smart Waiter Tone</label>
+        <select id="profileThemeAiAssistantToneInput">
+          <option value="default">Default</option>
+          <option value="friendly">Friendly</option>
+          <option value="formal">Formal</option>
+        </select>
+        <p class="admin-field-hint">This only changes Smart Waiter reply wording. It does not change ordering, payment, billing, or staff actions.</p>
+      </div>
+      <div class="admin-field">
+        <label class="admin-field-label" for="profileThemeAiAssistantExamplePromptInput">Smart Waiter Welcome Example</label>
+        <input id="profileThemeAiAssistantExamplePromptInput" maxlength="160" placeholder="best family combo under 900" />
+        <p class="admin-field-hint">This only shows a small “Try asking:” example line in the public Smart Waiter card.</p>
+      </div>
+      <div class="admin-field">
+        <label class="admin-field-label" for="profileThemeAiAssistantPromptsInput">Smart Waiter Starter Prompts</label>
+        <textarea id="profileThemeAiAssistantPromptsInput" rows="5" placeholder="Best veg starter under 300&#10;Suggest something spicy for 2 people&#10;Tell me about paneer tikka"></textarea>
+        <p class="admin-field-hint">One prompt per line. These only change the public quick-question chips and do not affect ordering or payment flow.</p>
+      </div>
+      <p class="admin-sub">Safe visibility toggles are limited to about, events, reservation, gallery, and testimonials for now.</p>
     <label>
       <input id="profileThemeShowAboutInput" type="checkbox" checked />
       Show About Section

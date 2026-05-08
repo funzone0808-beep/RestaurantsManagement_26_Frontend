@@ -3391,6 +3391,31 @@ function setInputValue(id, value) {
   input.value = value || "";
 }
 
+function parseLineSeparatedInput(value, { maxItems = 6, maxLength = 120 } = {}) {
+  const seen = new Set();
+
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .reduce((items, entry) => {
+      if (items.length >= maxItems) {
+        return items;
+      }
+
+      const candidate = entry.slice(0, maxLength);
+      const normalizedKey = candidate.toLowerCase();
+
+      if (!candidate || seen.has(normalizedKey)) {
+        return items;
+      }
+
+      seen.add(normalizedKey);
+      items.push(candidate);
+      return items;
+    }, []);
+}
+
 function getValidProfileHeroScenePreset(value) {
   const candidate = String(value || "").trim().toLowerCase();
   return PROFILE_HERO_SCENE_PRESETS[candidate] ? candidate : "";
@@ -3833,6 +3858,12 @@ function fillProfileThemeFields(theme) {
     safeTheme.payment && typeof safeTheme.payment === "object" && !Array.isArray(safeTheme.payment)
       ? safeTheme.payment
       : {};
+  const aiAssistant =
+    safeTheme.aiAssistant &&
+    typeof safeTheme.aiAssistant === "object" &&
+    !Array.isArray(safeTheme.aiAssistant)
+      ? safeTheme.aiAssistant
+      : {};
   const content =
     safeTheme.content && typeof safeTheme.content === "object" && !Array.isArray(safeTheme.content)
       ? safeTheme.content
@@ -3891,6 +3922,24 @@ function fillProfileThemeFields(theme) {
     loadingScreen.accentColor || "";
   document.getElementById("profileThemeLoadingTextColorInput").value =
     loadingScreen.textColor || "";
+  document.getElementById("profileThemeAiAssistantEnabledInput").checked =
+    aiAssistant.enabled !== false;
+  document.getElementById("profileThemeAiAssistantTitleInput").value =
+    aiAssistant.title || "";
+  document.getElementById("profileThemeAiAssistantIntroInput").value =
+    aiAssistant.intro || "";
+  document.getElementById("profileThemeAiAssistantToneInput").value =
+    ["default", "friendly", "formal"].includes(aiAssistant.tone)
+      ? aiAssistant.tone
+      : "default";
+  setInputValue(
+    "profileThemeAiAssistantExamplePromptInput",
+    aiAssistant.examplePrompt || ""
+  );
+  setInputValue(
+    "profileThemeAiAssistantPromptsInput",
+    Array.isArray(aiAssistant.starterPrompts) ? aiAssistant.starterPrompts.join("\n") : ""
+  );
   document.getElementById("profileUpiDiscountPercentInput").value =
     payment.upiDiscountPercent ?? "";
   document.getElementById("profileDeliveryChargeInput").value =
@@ -4251,6 +4300,23 @@ function buildProfileThemePayload(currentHotelSlug) {
     "profileDeliveryChargeInput",
     "Website delivery charge"
   );
+  const aiAssistantEnabled = Boolean(
+    document.getElementById("profileThemeAiAssistantEnabledInput")?.checked
+  );
+  const aiAssistantTitle = getTrimmedInputValue("profileThemeAiAssistantTitleInput");
+  const aiAssistantIntro = getTrimmedInputValue("profileThemeAiAssistantIntroInput");
+  const aiAssistantToneRaw = getTrimmedInputValue("profileThemeAiAssistantToneInput").toLowerCase();
+  const aiAssistantTone =
+    aiAssistantToneRaw === "friendly" || aiAssistantToneRaw === "formal"
+      ? aiAssistantToneRaw
+      : "default";
+  const aiAssistantExamplePrompt = getTrimmedInputValue(
+    "profileThemeAiAssistantExamplePromptInput"
+  );
+  const aiAssistantStarterPrompts = parseLineSeparatedInput(
+    document.getElementById("profileThemeAiAssistantPromptsInput")?.value || "",
+    { maxItems: 6, maxLength: 120 }
+  );
   const showAbout = Boolean(document.getElementById("profileThemeShowAboutInput")?.checked);
   const showEvents = Boolean(document.getElementById("profileThemeShowEventsInput")?.checked);
   const showReservation = Boolean(
@@ -4370,6 +4436,55 @@ function buildProfileThemePayload(currentHotelSlug) {
     } else {
       delete nextTheme.payment;
     }
+  }
+
+  const currentAiAssistant =
+    nextTheme.aiAssistant &&
+    typeof nextTheme.aiAssistant === "object" &&
+    !Array.isArray(nextTheme.aiAssistant)
+      ? { ...nextTheme.aiAssistant }
+      : {};
+
+  if (aiAssistantEnabled) {
+    delete currentAiAssistant.enabled;
+  } else {
+    currentAiAssistant.enabled = false;
+  }
+
+  if (aiAssistantTitle) {
+    currentAiAssistant.title = aiAssistantTitle;
+  } else {
+    delete currentAiAssistant.title;
+  }
+
+  if (aiAssistantIntro) {
+    currentAiAssistant.intro = aiAssistantIntro;
+  } else {
+    delete currentAiAssistant.intro;
+  }
+
+  if (aiAssistantTone !== "default") {
+    currentAiAssistant.tone = aiAssistantTone;
+  } else {
+    delete currentAiAssistant.tone;
+  }
+
+  if (aiAssistantExamplePrompt) {
+    currentAiAssistant.examplePrompt = aiAssistantExamplePrompt;
+  } else {
+    delete currentAiAssistant.examplePrompt;
+  }
+
+  if (aiAssistantStarterPrompts.length) {
+    currentAiAssistant.starterPrompts = aiAssistantStarterPrompts;
+  } else {
+    delete currentAiAssistant.starterPrompts;
+  }
+
+  if (Object.keys(currentAiAssistant).length) {
+    nextTheme.aiAssistant = currentAiAssistant;
+  } else {
+    delete nextTheme.aiAssistant;
   }
 
   const currentTypography =

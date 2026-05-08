@@ -23,10 +23,29 @@
   };
 
   const CLOSED_TRACKING_STATUSES = new Set(["completed", "cancelled", "payment_failed"]);
+  const SMART_WAITER_TRACKING_CONTEXT_EVENT = "smartwaiter:tracking-context";
+  const TRACKING_ASSISTANT_READY_MESSAGE = "Smart Waiter is ready for safe tracking questions.";
+  const TRACKING_ASSISTANT_SYNCED_MESSAGE = "Smart Waiter is synced to the latest tracking state.";
+  const TRACKING_ASSISTANT_CLOSED_MESSAGE = "This tracked order is now closed. Smart Waiter is limited to final read-only status on this page.";
+  const TRACKING_ASSISTANT_REPLY_READY_MESSAGE = "Read-only tracking reply ready.";
+  const TRACKING_ASSISTANT_SAFE_PROMPTS = new Set([
+    "What is my order status?",
+    "Can I add more items?",
+    "Is my bill ready?",
+    "How do I request the bill?",
+    "How do I call staff?"
+  ]);
+  const TRACKING_ASSISTANT_SUPPORT_PROMPTS = new Set([
+    "How do I request the bill?",
+    "How do I call staff?"
+  ]);
   let refreshTimer = null;
   let latestOrder = null;
   let latestStatus = "";
   let hasRenderedFirstOrder = false;
+  let trackingAssistantActivePrompt = "";
+  let trackingAssistantLoading = false;
+  let latestTrackingAssistantReply = null;
 
   const $ = (selector) => document.querySelector(selector);
 
@@ -164,6 +183,768 @@
       actions.tableActionsEnabled === true &&
       Boolean(actions.requestBillWhatsappLink || actions.callStaffWhatsappLink)
     );
+  }
+
+  function publishSmartWaiterTrackingContext(context = null) {
+    if (typeof window === "undefined") return;
+
+    window.SMART_WAITER_TRACKING_CONTEXT =
+      context && typeof context === "object" ? context : null;
+
+    if (
+      typeof window.dispatchEvent === "function" &&
+      typeof window.CustomEvent === "function"
+    ) {
+      window.dispatchEvent(
+        new window.CustomEvent(SMART_WAITER_TRACKING_CONTEXT_EVENT, {
+          detail: {
+            context: window.SMART_WAITER_TRACKING_CONTEXT
+          }
+        })
+      );
+    }
+  }
+
+  function buildSmartWaiterTrackingContext(order = latestOrder) {
+    const trackingContext = getTrackingContext();
+    const safeOrder = order && typeof order === "object" ? order : {};
+    const normalizedStatus = normalizeText(safeOrder.status || "new", 60).toLowerCase();
+    const addOns = Array.isArray(safeOrder.addOns) ? safeOrder.addOns : [];
+    const tableOrder = isTableOrder(safeOrder);
+    const canAddItems = canAddMoreItems(safeOrder);
+    const billReady = canViewBill(safeOrder);
+    const tableActionsReady = hasTableActions(safeOrder);
+
+    return {
+      pageScope: "order_tracking",
+      hotelSlug: normalizeText(safeOrder.hotelSlug || trackingContext.hotelSlug, 120),
+      hotelName: normalizeText(safeOrder.hotelName, 160),
+      orderId: normalizeText(safeOrder.id || trackingContext.orderId, 120),
+      trackingToken: normalizeText(trackingContext.token, 200),
+      orderType: normalizeText(safeOrder.orderType, 40),
+      orderSource: normalizeText(safeOrder.orderSource, 40),
+      tableNumber: normalizeText(safeOrder.tableNumber, 80),
+      status: normalizedStatus,
+      statusLabel: getStatusLabel(normalizedStatus),
+      statusDetail: getStatusDetail(normalizedStatus),
+      paymentStatus: normalizeText(safeOrder.paymentStatus, 60),
+      billingStatus: normalizeText(safeOrder.billingStatus, 60),
+      billNumber: normalizeText(safeOrder.billNumber, 120),
+      isTableOrder: tableOrder,
+      isClosed: isClosedTrackingStatus(normalizedStatus),
+      canAddMoreItems: canAddItems,
+      canViewBill: billReady,
+      hasTableActions: tableActionsReady,
+      addOnCount: addOns.length,
+      actionAvailability: {
+        addMoreItems: canAddItems,
+        viewBill: billReady,
+        requestBill: tableActionsReady && !billReady,
+        callStaff: tableActionsReady
+      },
+      refreshedAt: new Date().toISOString()
+    };
+  }
+
+  function syncSmartWaiterTrackingContext(order = latestOrder) {
+    publishSmartWaiterTrackingContext(buildSmartWaiterTrackingContext(order));
+  }
+
+  function clearSmartWaiterTrackingContext() {
+    publishSmartWaiterTrackingContext(null);
+  }
+
+  function getTrackingAssistantElements() {
+    return {
+      section: $("#trackingSmartWaiter"),
+      intro: $("#trackingSmartWaiterIntro"),
+      pill: $("#trackingSmartWaiterPill"),
+      prompts: $("#trackingSmartWaiterPrompts"),
+      promptHint: $("#trackingSmartWaiterPromptHint"),
+      status: $("#trackingSmartWaiterStatus"),
+      reply: $("#trackingSmartWaiterReply"),
+      followUps: $("#trackingSmartWaiterFollowUps"),
+      helpers: $("#trackingSmartWaiterHelpers"),
+      preview: $("#trackingSmartWaiterPreview"),
+      previewTitle: $("#trackingSmartWaiterPreviewTitle"),
+      previewMessage: $("#trackingSmartWaiterPreviewMessage"),
+      previewConfirm: $("#trackingSmartWaiterPreviewConfirm"),
+      previewCancel: $("#trackingSmartWaiterPreviewCancel"),
+      answer: $("#trackingSmartWaiterAnswer"),
+      disclaimer: $("#trackingSmartWaiterDisclaimer")
+    };
+  }
+
+  function buildTrackingAssistantRequestContext(order = latestOrder) {
+    const publishedContext =
+      window.SMART_WAITER_TRACKING_CONTEXT &&
+      typeof window.SMART_WAITER_TRACKING_CONTEXT === "object"
+        ? window.SMART_WAITER_TRACKING_CONTEXT
+        : null;
+    const trackingContext = getTrackingContext();
+    const safeOrder = order && typeof order === "object" ? order : {};
+    const hotelSlug = normalizeText(
+      publishedContext?.hotelSlug || safeOrder.hotelSlug || trackingContext.hotelSlug,
+      120
+    );
+    const orderId = normalizeText(
+      publishedContext?.orderId || safeOrder.id || trackingContext.orderId,
+      120
+    );
+    const token = normalizeText(
+      publishedContext?.trackingToken || trackingContext.token,
+      200
+    );
+
+    if (!hotelSlug || !orderId || !token) {
+      return null;
+    }
+
+    return {
+      pageScope: "order_tracking",
+      trackingHotelSlug: hotelSlug,
+      trackingOrderId: orderId,
+      trackingToken: token,
+      orderType: normalizeText(
+        publishedContext?.orderType || safeOrder.orderType,
+        40
+      ),
+      orderSource: normalizeText(
+        publishedContext?.orderSource || safeOrder.orderSource,
+        40
+      ),
+      tableNumber: normalizeText(
+        publishedContext?.tableNumber || safeOrder.tableNumber,
+        80
+      )
+    };
+  }
+
+  function setTrackingAssistantStatus(message = TRACKING_ASSISTANT_READY_MESSAGE, options = {}) {
+    const { loading = false } = options;
+    const { status } = getTrackingAssistantElements();
+
+    if (!status) return;
+
+    status.textContent = message || "";
+    status.classList.toggle("is-loading", !!loading);
+  }
+
+  function setTrackingAssistantLoading(isLoading) {
+    trackingAssistantLoading = !!isLoading;
+    const { section } = getTrackingAssistantElements();
+
+    if (!section) return;
+
+    section.querySelectorAll("[data-tracking-assistant-prompt]").forEach((button) => {
+      button.disabled = trackingAssistantLoading;
+      button.classList.toggle(
+        "is-active",
+        trackingAssistantLoading &&
+          normalizeText(button.dataset.trackingAssistantPrompt, 120) === trackingAssistantActivePrompt
+      );
+    });
+  }
+
+  function setTrackingAssistantActivePrompt(prompt = "") {
+    trackingAssistantActivePrompt = normalizeText(prompt, 120);
+    setTrackingAssistantLoading(trackingAssistantLoading);
+  }
+
+  function clearTrackingAssistantReply() {
+    const {
+      reply,
+      followUps,
+      helpers,
+      preview,
+      previewTitle,
+      previewMessage,
+      previewConfirm,
+      previewCancel,
+      answer,
+      disclaimer
+    } = getTrackingAssistantElements();
+
+    if (!reply || !followUps || !helpers || !answer || !disclaimer) return;
+
+    latestTrackingAssistantReply = null;
+    reply.hidden = true;
+    followUps.hidden = true;
+    followUps.innerHTML = "";
+    helpers.hidden = true;
+    helpers.innerHTML = "";
+    if (preview) {
+      preview.hidden = true;
+    }
+    if (previewTitle) {
+      previewTitle.textContent = "";
+    }
+    if (previewMessage) {
+      previewMessage.textContent = "";
+    }
+    if (previewConfirm) {
+      previewConfirm.textContent = "";
+    }
+    if (previewCancel) {
+      previewCancel.textContent = "";
+    }
+    answer.textContent = "";
+    disclaimer.textContent = "";
+  }
+
+  function hideTrackingAssistant() {
+    const { section } = getTrackingAssistantElements();
+    if (!section) return;
+
+    section.hidden = true;
+    setTrackingAssistantActivePrompt("");
+    setTrackingAssistantLoading(false);
+    clearTrackingAssistantReply();
+    setTrackingAssistantStatus(TRACKING_ASSISTANT_READY_MESSAGE);
+  }
+
+  function syncTrackingAssistantAvailability(order = latestOrder) {
+    const elements = getTrackingAssistantElements();
+    if (!elements.section) return;
+
+    const context = buildTrackingAssistantRequestContext(order);
+
+    if (!context) {
+      hideTrackingAssistant();
+      return;
+    }
+
+    elements.section.hidden = false;
+    if (elements.intro) {
+      elements.intro.textContent = context.tableNumber
+        ? `Ask safe read-only questions for Table ${context.tableNumber}.`
+        : "Ask safe read-only questions about this tracked order.";
+    }
+
+    if (elements.pill) {
+      elements.pill.textContent = context.tableNumber
+        ? `Table ${context.tableNumber}`
+        : "Read only";
+    }
+
+    syncTrackingAssistantPromptVisibility(order);
+    syncTrackingAssistantReplyState(order);
+
+    if (!trackingAssistantLoading && elements.status) {
+      setTrackingAssistantStatus(getTrackingAssistantSyncedStatusMessage(order));
+    }
+  }
+
+  function getTrackingAssistantSyncedStatusMessage(order = latestOrder) {
+    const safeOrder = order && typeof order === "object" ? order : {};
+    const normalizedStatus = normalizeText(safeOrder.status, 60).toLowerCase();
+
+    if (isClosedTrackingStatus(normalizedStatus)) {
+      return TRACKING_ASSISTANT_CLOSED_MESSAGE;
+    }
+
+    if (latestTrackingAssistantReply && typeof latestTrackingAssistantReply === "object") {
+      const previewContract = getTrackingAssistantPreviewContract(
+        getTrackingAssistantHelperActions(latestTrackingAssistantReply, order)
+      );
+
+      if (previewContract) {
+        return getTrackingAssistantPreviewStatusMessage(previewContract);
+      }
+    }
+
+    if (latestTrackingAssistantReply && typeof latestTrackingAssistantReply === "object") {
+      return TRACKING_ASSISTANT_SYNCED_MESSAGE;
+    }
+
+    return TRACKING_ASSISTANT_READY_MESSAGE;
+  }
+
+  function getTrackingAssistantVisiblePromptSet(order = latestOrder) {
+    const safeOrder = order && typeof order === "object" ? order : {};
+    const visiblePrompts = new Set([
+      "What is my order status?",
+      "Is my bill ready?"
+    ]);
+    const requestBillLink = $("#requestBillLink");
+    const callStaffLink = $("#callStaffLink");
+
+    if (canAddMoreItems(safeOrder)) {
+      visiblePrompts.add("Can I add more items?");
+    }
+
+    if (hasTableActions(safeOrder) && requestBillLink && !requestBillLink.hidden) {
+      visiblePrompts.add("How do I request the bill?");
+    }
+
+    if (hasTableActions(safeOrder) && callStaffLink && !callStaffLink.hidden) {
+      visiblePrompts.add("How do I call staff?");
+    }
+
+    return visiblePrompts;
+  }
+
+  function syncTrackingAssistantPromptVisibility(order = latestOrder) {
+    const { prompts, promptHint } = getTrackingAssistantElements();
+    if (!prompts) return;
+
+    const visiblePrompts = getTrackingAssistantVisiblePromptSet(order);
+    let shouldClearActivePrompt = false;
+
+    prompts.querySelectorAll("[data-tracking-assistant-prompt]").forEach((button) => {
+      const prompt = normalizeText(button.dataset.trackingAssistantPrompt, 120);
+      const shouldShow = visiblePrompts.has(prompt);
+
+      button.hidden = !shouldShow;
+
+      if (!shouldShow && trackingAssistantActivePrompt === prompt) {
+        shouldClearActivePrompt = true;
+      }
+    });
+
+    if (shouldClearActivePrompt) {
+      trackingAssistantActivePrompt = "";
+      setTrackingAssistantLoading(trackingAssistantLoading);
+    }
+
+    if (promptHint) {
+      const safeOrder = order && typeof order === "object" ? order : {};
+      const showClosedPromptHint =
+        isClosedTrackingStatus(safeOrder.status) && visiblePrompts.size <= 2;
+
+      promptHint.hidden = !showClosedPromptHint;
+      promptHint.textContent = showClosedPromptHint
+        ? "This order is closed, so Smart Waiter now keeps only final status and bill-readiness questions."
+        : "";
+    }
+  }
+
+  function getTrackingAssistantSafeFollowUps(assistant = {}) {
+    const followUpPrompts = Array.isArray(assistant.followUpPrompts)
+      ? assistant.followUpPrompts
+      : [];
+    const visiblePrompts = getTrackingAssistantVisiblePromptSet();
+
+    return followUpPrompts
+      .map((prompt) => normalizeText(prompt, 120))
+      .filter(
+        (prompt) =>
+          TRACKING_ASSISTANT_SAFE_PROMPTS.has(prompt) &&
+          visiblePrompts.has(prompt) &&
+          (!TRACKING_ASSISTANT_SUPPORT_PROMPTS.has(prompt) || visiblePrompts.has(prompt))
+      )
+      .slice(0, 3);
+  }
+
+  function getTrackingAssistantHelperActions(assistant = {}, order = latestOrder) {
+    const helpers = [];
+    const safeOrder = order && typeof order === "object" ? order : {};
+    const mode = normalizeText(assistant?.meta?.mode, 80).toLowerCase();
+    const viewBillLink = $("#trackingViewBillLink");
+    const addMoreItemsLink = $("#addMoreItemsLink");
+    const requestBillLink = $("#requestBillLink");
+    const callStaffLink = $("#callStaffLink");
+
+    if (
+      mode === "tracking_bill_ready" &&
+      canViewBill(safeOrder) &&
+      viewBillLink &&
+      !viewBillLink.hidden
+    ) {
+      helpers.push({
+        type: "view_bill",
+        label: "Open the real View Bill control"
+      });
+    }
+
+    if (
+      mode === "tracking_add_more" &&
+      canAddMoreItems(safeOrder) &&
+      addMoreItemsLink &&
+      !addMoreItemsLink.hidden
+    ) {
+      helpers.push({
+        type: "add_more_items",
+        label: "Open the real Add More Items control"
+      });
+    }
+
+    if (
+      mode === "tracking_request_bill" &&
+      requestBillLink &&
+      !requestBillLink.hidden
+    ) {
+      helpers.push({
+        type: "request_bill",
+        label: "Open the real Request Bill control"
+      });
+    }
+
+    if (
+      mode === "tracking_call_staff" &&
+      callStaffLink &&
+      !callStaffLink.hidden
+    ) {
+      helpers.push({
+        type: "call_staff",
+        label: "Open the real Call Staff control"
+      });
+    }
+
+    return helpers;
+  }
+
+  function getTrackingAssistantHelperTarget(helperType = "") {
+    const normalizedType = normalizeText(helperType, 40).toLowerCase();
+    return normalizedType === "view_bill"
+      ? $("#trackingViewBillLink")
+      : normalizedType === "add_more_items"
+        ? $("#addMoreItemsLink")
+        : normalizedType === "request_bill"
+          ? $("#requestBillLink")
+          : normalizedType === "call_staff"
+            ? $("#callStaffLink")
+            : null;
+  }
+
+  function getTrackingAssistantHelperUnavailableMessage(helperType = "") {
+    const normalizedType = normalizeText(helperType, 40).toLowerCase();
+    return normalizedType === "view_bill"
+      ? "The View Bill control is not available right now."
+      : normalizedType === "add_more_items"
+        ? "The Add More Items control is not available right now."
+        : normalizedType === "request_bill"
+          ? "The Request Bill control is not available right now."
+          : "The Call Staff control is not available right now.";
+  }
+
+  function getTrackingAssistantHelperReadyMessage(helperType = "") {
+    const normalizedType = normalizeText(helperType, 40).toLowerCase();
+    return normalizedType === "view_bill"
+      ? "The real View Bill control is ready on this page."
+      : normalizedType === "add_more_items"
+        ? "The real Add More Items control is ready on this page."
+        : normalizedType === "request_bill"
+          ? "The real Request Bill control is ready on this page."
+        : "The real Call Staff control is ready on this page.";
+  }
+
+  function getSmartWaiterActionBridge() {
+    const bridge = window.SMART_WAITER_ACTION_BRIDGE;
+    return bridge &&
+      typeof bridge.getValidatedRequestConfirmationContract === "function"
+      ? bridge
+      : null;
+  }
+
+  function getTrackingAssistantValidatedRequestContract(helperType = "") {
+    const normalizedType = normalizeText(helperType, 40).toLowerCase();
+
+    if (normalizedType !== "request_bill" && normalizedType !== "call_staff") {
+      return null;
+    }
+
+    return (
+      getSmartWaiterActionBridge()?.getValidatedRequestConfirmationContract(
+        normalizedType,
+        {
+          surface: "tracking_smart_waiter",
+          sourceAction: normalizedType
+        }
+      ) || null
+    );
+  }
+
+  function getTrackingAssistantHelperActionDefinition(helperType = "") {
+    const normalizedType = normalizeText(helperType, 40).toLowerCase();
+    return getTrackingAssistantHelperActionRegistry()[normalizedType] || null;
+  }
+
+  function getTrackingAssistantPreviewContract(helperActions = []) {
+    return helperActions
+      .map((helper) => getTrackingAssistantHelperActionDefinition(helper?.type))
+      .map((definition) => definition?.futureValidatedRequestContract || null)
+      .find(Boolean);
+  }
+
+  function getTrackingAssistantPreviewStatusMessage(previewContract = null) {
+    const actionType = normalizeText(previewContract?.actionType, 40).toLowerCase();
+
+    return actionType === "request_bill"
+      ? "Preview only: Smart Waiter is showing how a future bill-request confirmation could look. It still will not send a bill request from here."
+      : actionType === "call_staff"
+        ? "Preview only: Smart Waiter is showing how a future call-staff confirmation could look. It still will not send a staff-help request from here."
+        : TRACKING_ASSISTANT_REPLY_READY_MESSAGE;
+  }
+
+  function renderTrackingAssistantConfirmationPreview(helperActions = []) {
+    const {
+      preview,
+      previewTitle,
+      previewMessage,
+      previewConfirm,
+      previewCancel
+    } = getTrackingAssistantElements();
+
+    if (!preview || !previewTitle || !previewMessage || !previewConfirm || !previewCancel) {
+      return;
+    }
+
+    const previewContract = getTrackingAssistantPreviewContract(helperActions);
+
+    if (!previewContract) {
+      preview.hidden = true;
+      previewTitle.textContent = "";
+      previewMessage.textContent = "";
+      previewConfirm.textContent = "";
+      previewCancel.textContent = "";
+      return;
+    }
+
+    previewTitle.textContent = previewContract.confirmationTitle || "Future confirmation";
+    previewMessage.textContent =
+      previewContract.confirmationMessage ||
+      "This future action should stay behind the normal validated tracking request flow.";
+    previewConfirm.textContent = previewContract.confirmLabel || "Confirm";
+    previewCancel.textContent = previewContract.cancelLabel || "Cancel";
+    preview.hidden = false;
+
+    return previewContract;
+  }
+
+  function scrollToTrackingAssistantHelperTarget(helperType = "") {
+    const normalizedType = normalizeText(helperType, 40).toLowerCase();
+    const target = getTrackingAssistantHelperTarget(normalizedType);
+
+    if (!target || target.hidden) {
+      setTrackingAssistantStatus(getTrackingAssistantHelperUnavailableMessage(normalizedType));
+      return;
+    }
+
+    target.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+
+    if (typeof target.focus === "function") {
+      target.focus({ preventScroll: true });
+    }
+
+    setTrackingAssistantStatus(getTrackingAssistantHelperReadyMessage(normalizedType));
+  }
+
+  function getTrackingAssistantHelperActionRegistry() {
+    return {
+      view_bill: {
+        safetyLevel: "navigation",
+        run() {
+          scrollToTrackingAssistantHelperTarget("view_bill");
+        }
+      },
+      add_more_items: {
+        safetyLevel: "navigation",
+        run() {
+          scrollToTrackingAssistantHelperTarget("add_more_items");
+        }
+      },
+      request_bill: {
+        safetyLevel: "navigation",
+        futureValidatedRequestContract:
+          getTrackingAssistantValidatedRequestContract("request_bill"),
+        run() {
+          scrollToTrackingAssistantHelperTarget("request_bill");
+        }
+      },
+      call_staff: {
+        safetyLevel: "navigation",
+        futureValidatedRequestContract:
+          getTrackingAssistantValidatedRequestContract("call_staff"),
+        run() {
+          scrollToTrackingAssistantHelperTarget("call_staff");
+        }
+      }
+    };
+  }
+
+  function handleTrackingAssistantHelperAction(helperType = "") {
+    const normalizedType = normalizeText(helperType, 40).toLowerCase();
+    const actionDefinition = getTrackingAssistantHelperActionDefinition(normalizedType);
+
+    if (!actionDefinition || typeof actionDefinition.run !== "function") {
+      console.warn("Blocked unsupported tracking Smart Waiter helper action:", normalizedType);
+      return;
+    }
+
+    actionDefinition.run();
+  }
+
+  function renderTrackingAssistantReply(assistant = {}) {
+    const { reply, followUps, helpers, answer, disclaimer } = getTrackingAssistantElements();
+
+    if (!reply || !followUps || !helpers || !answer || !disclaimer) return;
+
+    latestTrackingAssistantReply =
+      assistant && typeof assistant === "object"
+        ? {
+            answer: assistant.answer || "",
+            disclaimer: assistant.disclaimer || "",
+            meta: assistant.meta && typeof assistant.meta === "object"
+              ? { ...assistant.meta }
+              : {},
+            followUpPrompts: Array.isArray(assistant.followUpPrompts)
+              ? [...assistant.followUpPrompts]
+              : []
+          }
+        : null;
+
+    const safeFollowUps = getTrackingAssistantSafeFollowUps(assistant);
+    const helperActions = getTrackingAssistantHelperActions(assistant);
+
+    answer.textContent = assistant.answer || "I could not prepare a safe tracking reply just now.";
+    disclaimer.textContent =
+      assistant.disclaimer ||
+      "This Smart Waiter card reads only this tracking page's token-scoped order state and does not change the order.";
+    followUps.innerHTML = safeFollowUps
+      .map(
+        (prompt) => `
+          <button
+            type="button"
+            class="tracking-smart-waiter__chip"
+            data-tracking-assistant-prompt="${prompt.replace(/"/g, "&quot;")}"
+          >
+            ${prompt}
+          </button>
+        `
+      )
+      .join("");
+    followUps.hidden = !safeFollowUps.length;
+    helpers.innerHTML = helperActions
+      .map(
+        (helper) => `
+          <button
+            type="button"
+            class="tracking-smart-waiter__helper-btn"
+            data-tracking-assistant-helper="${helper.type}"
+          >
+            ${helper.label}
+          </button>
+        `
+      )
+      .join("");
+    helpers.hidden = !helperActions.length;
+    return renderTrackingAssistantConfirmationPreview(helperActions);
+    reply.hidden = false;
+  }
+
+  function syncTrackingAssistantReplyState(order = latestOrder) {
+    const { reply } = getTrackingAssistantElements();
+
+    if (
+      !reply ||
+      reply.hidden ||
+      !latestTrackingAssistantReply ||
+      typeof latestTrackingAssistantReply !== "object"
+    ) {
+      return;
+    }
+
+    const safeFollowUps = getTrackingAssistantSafeFollowUps(latestTrackingAssistantReply);
+    const helperActions = getTrackingAssistantHelperActions(latestTrackingAssistantReply, order);
+    const { followUps, helpers } = getTrackingAssistantElements();
+
+    if (followUps) {
+      followUps.innerHTML = safeFollowUps
+        .map(
+          (prompt) => `
+            <button
+              type="button"
+              class="tracking-smart-waiter__chip"
+              data-tracking-assistant-prompt="${prompt.replace(/"/g, "&quot;")}"
+            >
+              ${prompt}
+            </button>
+          `
+        )
+        .join("");
+      followUps.hidden = !safeFollowUps.length;
+    }
+
+    if (helpers) {
+      helpers.innerHTML = helperActions
+        .map(
+          (helper) => `
+            <button
+              type="button"
+              class="tracking-smart-waiter__helper-btn"
+              data-tracking-assistant-helper="${helper.type}"
+            >
+              ${helper.label}
+            </button>
+          `
+        )
+        .join("");
+      helpers.hidden = !helperActions.length;
+    }
+
+    renderTrackingAssistantConfirmationPreview(helperActions);
+  }
+
+  async function requestTrackingAssistantReply(message = "") {
+    const prompt = normalizeText(message, 120);
+    const context = buildTrackingAssistantRequestContext();
+    const hotelSlug = normalizeText(context?.trackingHotelSlug, 120);
+
+    if (!prompt || !context || !hotelSlug) {
+      setTrackingAssistantStatus(
+        "Smart Waiter could not verify the current tracking context. Please refresh the tracking page and try again."
+      );
+      clearTrackingAssistantReply();
+      return;
+    }
+
+    try {
+      setTrackingAssistantActivePrompt(prompt);
+      setTrackingAssistantLoading(true);
+      setTrackingAssistantStatus("Smart Waiter is checking this tracked order...", {
+        loading: true
+      });
+
+      const response = await fetch(
+        `${API_BASE}/public/assistant/menu/${encodeURIComponent(hotelSlug)}`,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            message: prompt,
+            context
+          })
+        }
+      );
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || payload.success === false) {
+        throw new Error(payload.message || "Smart Waiter could not read this tracked order.");
+      }
+
+      const previewContract = renderTrackingAssistantReply(payload.assistant || {});
+      setTrackingAssistantStatus(
+        previewContract
+          ? getTrackingAssistantPreviewStatusMessage(previewContract)
+          : TRACKING_ASSISTANT_REPLY_READY_MESSAGE
+      );
+    } catch (error) {
+      console.error("Tracking Smart Waiter request failed:", error);
+      clearTrackingAssistantReply();
+      setTrackingAssistantStatus(
+        error.message || "Smart Waiter could not read this tracked order right now."
+      );
+    } finally {
+      setTrackingAssistantLoading(false);
+      setTrackingAssistantActivePrompt("");
+    }
   }
 
   function setTableSupportStatus(message = "", type = "info") {
@@ -809,6 +1590,7 @@
 
   function renderOrder(order = {}) {
     latestOrder = order;
+    syncSmartWaiterTrackingContext(order);
 
     document.title = `Track Order #${order.id || ""}`;
     setText("#trackingSubtitle", `${order.hotelName || "Your hotel"} is updating this order as it moves forward.`);
@@ -839,6 +1621,7 @@
     updateBackToMenuLink(order);
     updateAddMoreItemsLink(order);
     updateTableActions(order);
+    syncTrackingAssistantAvailability(order);
     const statusNoticeShown = updateStatusChangeNotice(order);
     const closedMessageShown = updateClosedOrderMessage(order);
 
@@ -888,6 +1671,8 @@
       renderOrder(order);
     } catch (error) {
       console.error("Order tracking load failed:", error);
+      clearSmartWaiterTrackingContext();
+      hideTrackingAssistant();
       if (!silent) {
         setMessage(error.message || "Unable to load this tracking link.", "error");
         updateStatusBadge({ status: "error" });
@@ -914,6 +1699,7 @@
 
   function bindEvents() {
     const refreshButton = $("#refreshTrackingBtn");
+    const trackingAssistantSection = $("#trackingSmartWaiter");
 
     if (refreshButton) {
       refreshButton.addEventListener("click", () => {
@@ -926,6 +1712,25 @@
         queueTableSupportRequest(link.dataset.trackingSupportAction || "");
       });
     });
+
+    if (trackingAssistantSection) {
+      trackingAssistantSection.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-tracking-assistant-prompt]");
+        if (button && !trackingAssistantLoading) {
+          void requestTrackingAssistantReply(button.dataset.trackingAssistantPrompt || "");
+          return;
+        }
+
+        const helperButton = event.target.closest("[data-tracking-assistant-helper]");
+        if (!helperButton || trackingAssistantLoading) {
+          return;
+        }
+
+        handleTrackingAssistantHelperAction(
+          helperButton.dataset.trackingAssistantHelper || ""
+        );
+      });
+    }
 
     window.addEventListener("beforeunload", () => {
       stopAutoRefresh();

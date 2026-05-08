@@ -27,6 +27,8 @@ const STAFF_STATE = {
   activeView: "dashboard",
   orders: [],
   dashboardReports: null,
+  dashboardReportsFreshnessLabel: "",
+  itemSalesReports: null,
   supportRequests: [],
   reservations: [],
   inquiries: [],
@@ -649,6 +651,8 @@ function resetStaffDashboardState() {
   STAFF_STATE.activeView = "dashboard";
   STAFF_STATE.orders = [];
   STAFF_STATE.dashboardReports = null;
+  STAFF_STATE.dashboardReportsFreshnessLabel = "";
+  STAFF_STATE.itemSalesReports = null;
   STAFF_STATE.supportRequests = [];
   STAFF_STATE.reservations = [];
   STAFF_STATE.inquiries = [];
@@ -1278,6 +1282,10 @@ function setStaffDashboardSummaryEmpty(
   const summaryWrap = $("#staffDashboardSummary");
   const reportsCopy = $("#staffDashboardReportsCopy");
   const reportsWrap = $("#staffDashboardReports");
+  const insightsCopy = $("#staffDashboardAiInsightsCopy");
+  const insightsWrap = $("#staffDashboardAiInsights");
+  const itemSalesCopy = $("#staffDashboardItemSalesCopy");
+  const itemSalesWrap = $("#staffDashboardItemSales");
   const supportSummaryWrap = $("#staffDashboardSupportSummary");
   const empty = $("#staffDashboardEmpty");
 
@@ -1294,6 +1302,28 @@ function setStaffDashboardSummaryEmpty(
   if (reportsWrap) {
     reportsWrap.hidden = true;
     reportsWrap.innerHTML = "";
+  }
+
+  if (insightsCopy) {
+    insightsCopy.hidden = true;
+    insightsCopy.textContent =
+      "Read-only manager insights grounded only in the report cards already loaded for this hotel.";
+  }
+
+  if (insightsWrap) {
+    insightsWrap.hidden = true;
+    insightsWrap.innerHTML = "";
+  }
+
+  if (itemSalesCopy) {
+    itemSalesCopy.hidden = true;
+    itemSalesCopy.textContent =
+      "Read-only sold-item patterns from hotel-scoped saved orders. Low-selling currently means low among items that were actually sold in the selected report window.";
+  }
+
+  if (itemSalesWrap) {
+    itemSalesWrap.hidden = true;
+    itemSalesWrap.innerHTML = "";
   }
 
   if (supportSummaryWrap) {
@@ -1361,6 +1391,653 @@ function buildStaffReportNote(summary = {}) {
   ].join(" - ");
 }
 
+function getStaffReportSummary(reports = STAFF_STATE.dashboardReports, key = "") {
+  if (!reports || typeof reports !== "object") {
+    return {};
+  }
+
+  return reports[key] && typeof reports[key] === "object" ? reports[key] : {};
+}
+
+function buildStaffDashboardAiInsightLine(label, copy, options = {}) {
+  const isFeatured = Boolean(options.isFeatured);
+  const featuredBadgeLabel = String(options.featuredBadgeLabel || "Best current signal").trim() || "Best current signal";
+
+  return `
+    <li class="staff-ai-insights-item${isFeatured ? " is-featured" : ""}">
+      <div class="staff-ai-insights-item-head">
+        <p class="staff-ai-insights-item-label">${escapeHTML(label)}</p>
+        ${
+          isFeatured
+            ? `<span class="staff-ai-insights-item-badge">${escapeHTML(featuredBadgeLabel)}</span>`
+            : ""
+        }
+      </div>
+      <p class="staff-ai-insights-item-copy">${escapeHTML(copy)}</p>
+    </li>
+  `;
+}
+
+function getStaffDashboardAiItemSalesInsight(itemSalesReports = STAFF_STATE.itemSalesReports) {
+  const period = getPreferredStaffItemSalesPeriod(itemSalesReports);
+  const summary = getStaffItemSalesReportSummary(itemSalesReports, period.key);
+  const menuMoversLead =
+    period.key === "month"
+      ? "This month's menu movers"
+      : period.key === "week"
+        ? "Menu movers for the last 7 days"
+        : "Today's menu movers";
+
+  if (!summary || Number(summary.totalDistinctItems || 0) <= 0) {
+    return {
+      label: "Menu movers",
+      copy: `${menuMoversLead} are still building for this hotel, so Smart Waiter is waiting before calling out top or low-selling dishes.`
+    };
+  }
+
+  const topItems = Array.isArray(summary.topItems) ? summary.topItems : [];
+  const lowItems = Array.isArray(summary.lowItems) ? summary.lowItems : [];
+  const topItem = topItems[0] || null;
+  const lowItem = lowItems[0] || null;
+  const topName = String(topItem?.itemName || topItem?.itemId || "").trim();
+  const lowName = String(lowItem?.itemName || lowItem?.itemId || "").trim();
+  const sameLeadItem =
+    topItem &&
+    lowItem &&
+    String(topItem.itemId || "").trim() &&
+    String(topItem.itemId || "").trim() === String(lowItem.itemId || "").trim();
+
+  if (topItem && lowItem && !sameLeadItem && topName && lowName) {
+    return {
+      label: "Menu movers",
+      copy: `${menuMoversLead} show ${topName} leading at ${topItem.quantitySold || 0} sold for ${formatMoney(topItem.revenue || 0)}, while ${lowName} is currently the lightest seller among sold items at ${lowItem.quantitySold || 0} sold for ${formatMoney(lowItem.revenue || 0)}.`
+    };
+  }
+
+  if (topItem && topName) {
+    return {
+      label: "Menu movers",
+      copy: `${menuMoversLead} currently have ${topName} as the clearest seller at ${topItem.quantitySold || 0} sold across ${topItem.orderCount || 0} order${Number(topItem.orderCount || 0) === 1 ? "" : "s"}, bringing in ${formatMoney(topItem.revenue || 0)}.`
+    };
+  }
+
+  return {
+    label: "Menu movers",
+    copy: `${menuMoversLead} are available, but there is not enough stable variety yet to describe top and low-selling dishes confidently.`
+  };
+}
+
+function getStaffDashboardAiOperationalWatchInsight(
+  reports = STAFF_STATE.dashboardReports,
+  itemSalesReports = STAFF_STATE.itemSalesReports
+) {
+  const today = getStaffReportSummary(reports, "today");
+  const week = getStaffReportSummary(reports, "week");
+  const todayOrders = Number(today.totalOrders || 0);
+  const todayUnbilledOrders = Number(today.unbilledOrders || 0);
+  const weekUnpaidOrders = Number(week.unpaidOrders || 0);
+  const weekUnpaidEarnings = Number(week.unpaidEarnings || 0);
+  const hasTodayBillingWatch = todayOrders > 0 && todayUnbilledOrders > 0;
+  const hasWeeklyPaymentWatch = weekUnpaidOrders > 0;
+  const period = getPreferredStaffItemSalesPeriod(itemSalesReports);
+  const itemSummary = getStaffItemSalesReportSummary(itemSalesReports, period.key);
+  const topItem = Array.isArray(itemSummary?.topItems) ? itemSummary.topItems[0] || null : null;
+  const lowItem = Array.isArray(itemSummary?.lowItems) ? itemSummary.lowItems[0] || null : null;
+  const topItemId = String(topItem?.itemId || "").trim();
+  const lowItemId = String(lowItem?.itemId || "").trim();
+  const lowItemName = String(lowItem?.itemName || lowItemId || "").trim();
+  const hasDistinctLowSeller =
+    Number(itemSummary?.totalDistinctItems || 0) > 1 &&
+    lowItem &&
+    lowItemName &&
+    (!topItemId || topItemId !== lowItemId);
+  const operationalWatchLead =
+    hasWeeklyPaymentWatch && hasTodayBillingWatch
+      ? "The active watch across the last 7 days and today"
+      : hasWeeklyPaymentWatch
+        ? "The last 7 days operational watch"
+        : hasTodayBillingWatch
+          ? "Today's operational watch"
+          : `${period.label} operational watch`;
+  const watchParts = [];
+
+  if (hasWeeklyPaymentWatch) {
+    watchParts.push(
+      `${weekUnpaidOrders} unpaid order${weekUnpaidOrders === 1 ? "" : "s"} from the last 7 days still hold ${formatMoney(weekUnpaidEarnings)} in pending collection`
+    );
+  }
+
+  if (hasTodayBillingWatch) {
+    watchParts.push(
+      `${todayUnbilledOrders} of today's order${todayUnbilledOrders === 1 ? "" : "s"} still need bill closure`
+    );
+  }
+
+  if (hasDistinctLowSeller) {
+    watchParts.push(
+      `${lowItemName} is currently the slowest-moving sold item in ${period.label.toLowerCase()} at ${lowItem.quantitySold || 0} sold`
+    );
+  }
+
+  if (!watchParts.length) {
+    return {
+      label: "Operational watchlist",
+      copy: `${operationalWatchLead} looks calm: unpaid carryover is clear, today's bill closure looks steady, and no slower-moving sold item needs a caution note yet.`
+    };
+  }
+
+  return {
+    label: "Operational watchlist",
+    copy: `${operationalWatchLead} is ${watchParts.join("; ")}.`
+  };
+}
+
+function getStaffDashboardAiSourceBalanceInsight(reports = STAFF_STATE.dashboardReports) {
+  const month = getStaffReportSummary(reports, "month");
+  const monthQrOrders = Number(month.qrOrders || 0);
+  const monthWebsiteOrders = Number(month.websiteOrders || 0);
+  const monthQrEarnings = Number(month.qrEarnings || 0);
+  const monthWebsiteEarnings = Number(month.websiteEarnings || 0);
+  const totalOrders = monthQrOrders + monthWebsiteOrders;
+
+  if (totalOrders <= 0) {
+    return {
+      label: "Source balance",
+      copy: "This month is still too quiet to flag a QR versus website balance caution yet."
+    };
+  }
+
+  const qrShare = monthQrOrders / totalOrders;
+  const websiteShare = monthWebsiteOrders / totalOrders;
+  const qrDominant = qrShare >= websiteShare;
+  const dominantLabel = qrDominant ? "QR and table" : "Website";
+  const supportingLabel = qrDominant ? "website" : "QR and table";
+  const dominantOrders = qrDominant ? monthQrOrders : monthWebsiteOrders;
+  const supportingOrders = qrDominant ? monthWebsiteOrders : monthQrOrders;
+  const dominantRevenue = qrDominant ? monthQrEarnings : monthWebsiteEarnings;
+  const supportingRevenue = qrDominant ? monthWebsiteEarnings : monthQrEarnings;
+  const dominantShare = qrDominant ? qrShare : websiteShare;
+  const shareLabel = `${Math.round(dominantShare * 100)}%`;
+
+  if (totalOrders >= 4 && dominantShare >= 0.75) {
+    return {
+      label: "Source balance",
+      copy: `${dominantLabel} ordering is carrying about ${shareLabel} of this month's order count at ${dominantOrders} order${dominantOrders === 1 ? "" : "s"} and ${formatMoney(dominantRevenue)}, while ${supportingLabel} is still lighter at ${supportingOrders} order${supportingOrders === 1 ? "" : "s"} and ${formatMoney(supportingRevenue)}. This is worth watching before the mix becomes too one-sided.`
+    };
+  }
+
+  if (totalOrders >= 4 && dominantShare >= 0.65) {
+    return {
+      label: "Source balance",
+      copy: `${dominantLabel} ordering is the stronger lane this month at about ${shareLabel} of order count, but the mix is still broad enough that this reads as a watch item rather than a concern.`
+    };
+  }
+
+  return {
+    label: "Source balance",
+    copy: `This month still looks reasonably balanced between QR/table and website ordering, with ${monthQrOrders} QR/table order${monthQrOrders === 1 ? "" : "s"} and ${monthWebsiteOrders} website order${monthWebsiteOrders === 1 ? "" : "s"}.`
+  };
+}
+
+function getStaffDashboardAiQuietStateInsight(
+  reports = STAFF_STATE.dashboardReports,
+  itemSalesReports = STAFF_STATE.itemSalesReports
+) {
+  const today = getStaffReportSummary(reports, "today");
+  const week = getStaffReportSummary(reports, "week");
+  const month = getStaffReportSummary(reports, "month");
+  const period = getPreferredStaffItemSalesPeriod(itemSalesReports);
+  const itemSummary = getStaffItemSalesReportSummary(itemSalesReports, period.key);
+  const todayOrders = Number(today.totalOrders || 0);
+  const todayUnbilledOrders = Number(today.unbilledOrders || 0);
+  const weekOrders = Number(week.totalOrders || 0);
+  const weekUnpaidOrders = Number(week.unpaidOrders || 0);
+  const monthOrders = Number(month.totalOrders || 0);
+  const distinctSoldItems = Number(itemSummary?.totalDistinctItems || 0);
+  const quietSnapshotLabel =
+    todayOrders > 0
+      ? "Today"
+      : weekOrders > 0
+        ? "Last 7 days"
+        : monthOrders > 0
+          ? "This month"
+          : "Today, last 7 days, and this month";
+  const hasMeaningfulSourcePattern = monthOrders >= 4;
+  const hasMeaningfulSoldItemPattern = distinctSoldItems >= 2;
+
+  if (
+    weekUnpaidOrders > 0 ||
+    todayUnbilledOrders > 0 ||
+    todayOrders >= 2 ||
+    weekOrders >= 4 ||
+    monthOrders >= 6 ||
+    hasMeaningfulSourcePattern ||
+    hasMeaningfulSoldItemPattern
+  ) {
+    return null;
+  }
+
+  if (monthOrders <= 0) {
+    return {
+      label: "Quiet dashboard",
+      copy: `${quietSnapshotLabel} is still very quiet for this hotel, so Smart Waiter is keeping the summary cautious until more order movement builds up.`
+    };
+  }
+
+  return {
+    label: "Quiet dashboard",
+    copy: `${quietSnapshotLabel} is the clearest quiet snapshot here, and this hotel is still in a light-activity window with ${monthOrders} month-to-date order${monthOrders === 1 ? "" : "s"} and ${weekOrders} order${weekOrders === 1 ? "" : "s"} in the last 7 days, so the current AI summary should be read as an early signal rather than a strong trend.`
+  };
+}
+
+function getStaffDashboardAiConfidenceNote(
+  reports = STAFF_STATE.dashboardReports,
+  itemSalesReports = STAFF_STATE.itemSalesReports
+) {
+  const today = getStaffReportSummary(reports, "today");
+  const week = getStaffReportSummary(reports, "week");
+  const month = getStaffReportSummary(reports, "month");
+  const period = getPreferredStaffItemSalesPeriod(itemSalesReports);
+  const itemSummary = getStaffItemSalesReportSummary(itemSalesReports, period.key);
+  const todayOrders = Number(today.totalOrders || 0);
+  const todayUnbilledOrders = Number(today.unbilledOrders || 0);
+  const weekUnpaidOrders = Number(week.unpaidOrders || 0);
+  const monthQrOrders = Number(month.qrOrders || 0);
+  const monthWebsiteOrders = Number(month.websiteOrders || 0);
+  const hasMonthlySourceTrend =
+    monthQrOrders > 0 ||
+    monthWebsiteOrders > 0;
+  const hasSoldItemSignal = Number(itemSummary?.totalDistinctItems || 0) > 0;
+  const quietStateInsight = getStaffDashboardAiQuietStateInsight(reports, itemSalesReports);
+
+  if (weekUnpaidOrders > 0) {
+    return `Strongest signal right now: Last 7 days, because pending collection follow-up is still active.`;
+  }
+
+  if (todayUnbilledOrders > 0) {
+    return `Strongest signal right now: Today, because bill closure still needs attention on live orders.`;
+  }
+
+  if (quietStateInsight) {
+    if (todayOrders > 0) {
+      return `Confidence is intentionally soft right now: Today offers the clearest live read, but overall activity is still light.`;
+    }
+
+    if (hasMonthlySourceTrend) {
+      return `Confidence is intentionally soft right now: This month offers the clearest pattern so far, but the order sample is still light.`;
+    }
+
+    if (hasSoldItemSignal) {
+      return `Confidence is intentionally soft right now: ${period.label} offers the clearest sold-item read so far, but the sample is still early.`;
+    }
+  }
+
+  if (todayOrders > 0) {
+    return `Strongest signal right now: Today, because the clearest live pace read is coming from current order activity.`;
+  }
+
+  if (hasMonthlySourceTrend) {
+    return `Strongest signal right now: This month, because source mix is the clearest stable trend available.`;
+  }
+
+  if (hasSoldItemSignal) {
+    return `Strongest signal right now: ${period.label}, because sold-item movement is the clearest stable pattern available.`;
+  }
+
+  return "Confidence is still light here because this hotel does not have enough current report movement yet.";
+}
+
+function getStaffDashboardAiFreshnessNote(
+  reports = STAFF_STATE.dashboardReports,
+  itemSalesReports = STAFF_STATE.itemSalesReports
+) {
+  const freshnessLabel = String(STAFF_STATE.dashboardReportsFreshnessLabel || "").trim();
+  const quietStateInsight = getStaffDashboardAiQuietStateInsight(reports, itemSalesReports);
+
+  if (quietStateInsight) {
+    return freshnessLabel
+      ? `Insight snapshot: ${freshnessLabel}. Activity is still quiet, so treat this as a light checkpoint.`
+      : "Insight snapshot is waiting for the first manager report refresh while activity is still quiet.";
+  }
+
+  return freshnessLabel
+    ? `Insight snapshot: ${freshnessLabel}.`
+    : "Insight snapshot is waiting for the first manager report refresh.";
+}
+
+function getStaffDashboardAiFeaturedLabel(
+  reports = STAFF_STATE.dashboardReports,
+  itemSalesReports = STAFF_STATE.itemSalesReports
+) {
+  const today = getStaffReportSummary(reports, "today");
+  const week = getStaffReportSummary(reports, "week");
+  const month = getStaffReportSummary(reports, "month");
+  const weekUnpaidOrders = Number(week.unpaidOrders || 0);
+  const todayUnbilledOrders = Number(today.unbilledOrders || 0);
+  const todayOrders = Number(today.totalOrders || 0);
+  const monthQrOrders = Number(month.qrOrders || 0);
+  const monthWebsiteOrders = Number(month.websiteOrders || 0);
+  const monthTotalOrders = monthQrOrders + monthWebsiteOrders;
+  const dominantShare = monthTotalOrders
+    ? Math.max(monthQrOrders, monthWebsiteOrders) / monthTotalOrders
+    : 0;
+  const quietStateInsight = getStaffDashboardAiQuietStateInsight(reports, itemSalesReports);
+  const itemPeriod = getPreferredStaffItemSalesPeriod(itemSalesReports);
+  const itemSummary = getStaffItemSalesReportSummary(itemSalesReports, itemPeriod.key);
+  const hasSoldItemSignal = Number(itemSummary?.totalDistinctItems || 0) > 0;
+
+  if (weekUnpaidOrders > 0) {
+    return "Payment watch";
+  }
+
+  if (todayUnbilledOrders > 0) {
+    return "Operational watchlist";
+  }
+
+  if (monthTotalOrders >= 4 && dominantShare >= 0.75) {
+    return "Source balance";
+  }
+
+  if (quietStateInsight) {
+    return "";
+  }
+
+  if (todayOrders > 0) {
+    return "Today at a glance";
+  }
+
+  if (hasSoldItemSignal) {
+    return "Menu movers";
+  }
+
+  if (quietStateInsight) {
+    return "Quiet dashboard";
+  }
+
+  return "Source mix";
+}
+
+function getStaffDashboardAiFeaturedBadgeLabel(featuredLabel = "") {
+  const normalizedLabel = String(featuredLabel || "").trim();
+  const cautionLabels = new Set(["Payment watch", "Operational watchlist", "Source balance"]);
+  const calmSummaryLabels = new Set(["Today at a glance", "Source mix", "Menu movers", "Quiet dashboard"]);
+
+  if (cautionLabels.has(normalizedLabel)) {
+    return "Watch now";
+  }
+
+  if (calmSummaryLabels.has(normalizedLabel)) {
+    return "Worth noting";
+  }
+
+  return "Best current signal";
+}
+
+function getStaffDashboardAiInsightItems(
+  reports = STAFF_STATE.dashboardReports,
+  itemSalesReports = STAFF_STATE.itemSalesReports
+) {
+  const today = getStaffReportSummary(reports, "today");
+  const week = getStaffReportSummary(reports, "week");
+  const month = getStaffReportSummary(reports, "month");
+
+  const todayOrders = Number(today.totalOrders || 0);
+  const weekUnpaidOrders = Number(week.unpaidOrders || 0);
+  const monthQrOrders = Number(month.qrOrders || 0);
+  const monthWebsiteOrders = Number(month.websiteOrders || 0);
+  const monthQrEarnings = Number(month.qrEarnings || 0);
+  const monthWebsiteEarnings = Number(month.websiteEarnings || 0);
+  const todayAtAGlanceLead = "Today's at-a-glance view";
+  const paymentWatchLead = "The last 7 days payment watch";
+  const sourceMixLead = "This month's source mix";
+
+  const items = [];
+  const quietStateInsight = getStaffDashboardAiQuietStateInsight(
+    reports,
+    itemSalesReports
+  );
+
+  items.push({
+    label: "Today at a glance",
+    copy: todayOrders
+      ? `${todayAtAGlanceLead} is running at ${formatMoney(today.totalEarnings || 0)} from ${todayOrders} order${todayOrders === 1 ? "" : "s"}, with ${today.paidOrders || 0} already marked paid.`
+      : `${todayAtAGlanceLead} does not have any recorded orders yet in this hotel's manager report.`
+  });
+
+  if (quietStateInsight) {
+    items.push(quietStateInsight);
+  }
+
+  items.push({
+    label: "Payment watch",
+    copy: weekUnpaidOrders
+      ? `${paymentWatchLead} still shows ${weekUnpaidOrders} unpaid order${weekUnpaidOrders === 1 ? "" : "s"} worth ${formatMoney(week.unpaidEarnings || 0)}, so payment follow-up is still active.`
+      : `${paymentWatchLead} shows all reported orders marked paid, covering ${formatMoney(week.paidEarnings || 0)} in confirmed paid revenue.`
+  });
+
+  if (monthQrOrders === 0 && monthWebsiteOrders === 0) {
+    items.push({
+      label: "Source mix",
+      copy: `${sourceMixLead} does not have enough order-source activity yet to explain a QR versus website trend.`
+    });
+  } else if (monthQrOrders > monthWebsiteOrders) {
+    items.push({
+      label: "Source mix",
+      copy: `${sourceMixLead} shows QR and table ordering leading at ${monthQrOrders} order${monthQrOrders === 1 ? "" : "s"} and ${formatMoney(monthQrEarnings)}, ahead of website ordering at ${monthWebsiteOrders} order${monthWebsiteOrders === 1 ? "" : "s"} and ${formatMoney(monthWebsiteEarnings)}.`
+    });
+  } else if (monthWebsiteOrders > monthQrOrders) {
+    items.push({
+      label: "Source mix",
+      copy: `${sourceMixLead} shows website ordering leading at ${monthWebsiteOrders} order${monthWebsiteOrders === 1 ? "" : "s"} and ${formatMoney(monthWebsiteEarnings)}, ahead of QR and table ordering at ${monthQrOrders} order${monthQrOrders === 1 ? "" : "s"} and ${formatMoney(monthQrEarnings)}.`
+    });
+  } else {
+    items.push({
+      label: "Source mix",
+      copy: `${sourceMixLead} is evenly split by order count, with ${monthQrOrders} QR/table order${monthQrOrders === 1 ? "" : "s"} and ${monthWebsiteOrders} website order${monthWebsiteOrders === 1 ? "" : "s"}, while revenue is ${formatMoney(monthQrEarnings)} versus ${formatMoney(monthWebsiteEarnings)}.`
+    });
+  }
+
+  items.push(getStaffDashboardAiSourceBalanceInsight(reports));
+  items.push(getStaffDashboardAiOperationalWatchInsight(reports, itemSalesReports));
+  items.push(getStaffDashboardAiItemSalesInsight(itemSalesReports));
+
+  return items;
+}
+
+function renderStaffDashboardAiInsights(reports = STAFF_STATE.dashboardReports) {
+  const insightsCopy = $("#staffDashboardAiInsightsCopy");
+  const insightsWrap = $("#staffDashboardAiInsights");
+
+  if (!insightsWrap) return;
+
+  if (!isStaffManagerSession()) {
+    if (insightsCopy) insightsCopy.hidden = true;
+    insightsWrap.hidden = true;
+    insightsWrap.innerHTML = "";
+    return;
+  }
+
+  const hasReports = reports && typeof reports === "object";
+  if (!hasReports) {
+    if (insightsCopy) insightsCopy.hidden = true;
+    insightsWrap.hidden = true;
+    insightsWrap.innerHTML = "";
+    return;
+  }
+
+  const insightItems = getStaffDashboardAiInsightItems(
+    reports,
+    STAFF_STATE.itemSalesReports
+  );
+  const featuredLabel = getStaffDashboardAiFeaturedLabel(
+    reports,
+    STAFF_STATE.itemSalesReports
+  );
+  const featuredBadgeLabel = getStaffDashboardAiFeaturedBadgeLabel(featuredLabel);
+  const confidenceNote = getStaffDashboardAiConfidenceNote(
+    reports,
+    STAFF_STATE.itemSalesReports
+  );
+  const freshnessNote = getStaffDashboardAiFreshnessNote(
+    reports,
+    STAFF_STATE.itemSalesReports
+  );
+
+  if (insightsCopy) {
+    insightsCopy.hidden = false;
+  }
+
+  insightsWrap.hidden = false;
+  insightsWrap.innerHTML = `
+    <div class="staff-ai-insights-head">
+      <div>
+        <p class="staff-ai-insights-kicker">Manager AI Insights</p>
+        <h4 class="staff-ai-insights-title">Read-only hotel insight summary</h4>
+      </div>
+      <div class="staff-ai-insights-meta">
+        <p class="staff-ai-insights-note">Grounded only in the current today, last 7 days, this month, and sold-item reports already loaded for this hotel.</p>
+        <p class="staff-ai-insights-confidence">${escapeHTML(confidenceNote)}</p>
+        <p class="staff-ai-insights-freshness">${escapeHTML(freshnessNote)}</p>
+      </div>
+    </div>
+    <ul class="staff-ai-insights-list">
+      ${insightItems
+        .map(({ label, copy }) =>
+          buildStaffDashboardAiInsightLine(label, copy, {
+            isFeatured: label === featuredLabel,
+            featuredBadgeLabel
+          })
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
+function getStaffItemSalesReportSummary(reports = STAFF_STATE.itemSalesReports, key = "") {
+  if (!reports || typeof reports !== "object") {
+    return null;
+  }
+
+  const summary = reports[key];
+  return summary && typeof summary === "object" ? summary : null;
+}
+
+function getPreferredStaffItemSalesPeriod(reports = STAFF_STATE.itemSalesReports) {
+  const periodOptions = [
+    { key: "month", label: "This month" },
+    { key: "week", label: "Last 7 days" },
+    { key: "today", label: "Today" }
+  ];
+
+  return (
+    periodOptions.find(({ key }) => {
+      const summary = getStaffItemSalesReportSummary(reports, key);
+      return summary && Number(summary.totalDistinctItems || 0) > 0;
+    }) || periodOptions[0]
+  );
+}
+
+function buildStaffItemSalesListMarkup(items = []) {
+  if (!Array.isArray(items) || !items.length) {
+    return `
+      <li class="staff-item-sales-row">
+        <p class="staff-item-sales-name">No sold items yet</p>
+        <p class="staff-item-sales-copy">This report window does not have enough sold-item history yet.</p>
+      </li>
+    `;
+  }
+
+  return items
+    .map((item) => {
+      const itemName = String(item?.itemName || item?.itemId || "Unnamed item").trim();
+      const quantitySold = Number(item?.quantitySold || 0);
+      const revenue = Number(item?.revenue || 0);
+      const orderCount = Number(item?.orderCount || 0);
+
+      return `
+        <li class="staff-item-sales-row">
+          <p class="staff-item-sales-name">${escapeHTML(itemName)}</p>
+          <p class="staff-item-sales-copy">${escapeHTML(`${quantitySold} sold across ${orderCount} order${orderCount === 1 ? "" : "s"} - ${formatMoney(revenue)}`)}</p>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function buildStaffItemSalesCard({
+  title = "",
+  label = "",
+  note = "",
+  items = [],
+  className = ""
+} = {}) {
+  const cardClassName = ["staff-summary-card", "staff-item-sales-card", className]
+    .filter(Boolean)
+    .join(" ");
+
+  return `
+    <article class="${escapeHTML(cardClassName)}">
+      <p class="staff-summary-label">${escapeHTML(label)}</p>
+      <p class="staff-summary-value">${escapeHTML(title)}</p>
+      <p class="staff-item-sales-period">${escapeHTML(note)}</p>
+      <ul class="staff-item-sales-list">
+        ${buildStaffItemSalesListMarkup(items)}
+      </ul>
+    </article>
+  `;
+}
+
+function renderStaffDashboardItemSalesReports(reports = STAFF_STATE.itemSalesReports) {
+  const itemSalesCopy = $("#staffDashboardItemSalesCopy");
+  const itemSalesWrap = $("#staffDashboardItemSales");
+
+  if (!itemSalesWrap) return;
+
+  if (!isStaffManagerSession()) {
+    if (itemSalesCopy) itemSalesCopy.hidden = true;
+    itemSalesWrap.hidden = true;
+    itemSalesWrap.innerHTML = "";
+    return;
+  }
+
+  const period = getPreferredStaffItemSalesPeriod(reports);
+  const summary = getStaffItemSalesReportSummary(reports, period.key);
+
+  if (!summary) {
+    if (itemSalesCopy) itemSalesCopy.hidden = true;
+    itemSalesWrap.hidden = true;
+    itemSalesWrap.innerHTML = "";
+    return;
+  }
+
+  const distinctItems = Number(summary.totalDistinctItems || 0);
+  const unitsSold = Number(summary.totalUnitsSold || 0);
+  const totalRevenue = Number(summary.totalRevenue || 0);
+
+  if (itemSalesCopy) {
+    itemSalesCopy.hidden = false;
+    itemSalesCopy.textContent =
+      `${period.label} sold-item snapshot for this hotel: ${distinctItems} distinct sold item${distinctItems === 1 ? "" : "s"}, ${unitsSold} unit${unitsSold === 1 ? "" : "s"}, and ${formatMoney(totalRevenue)} in item revenue. Low-selling still means low among sold items only.`;
+  }
+
+  itemSalesWrap.hidden = false;
+  itemSalesWrap.innerHTML = [
+    buildStaffItemSalesCard({
+      label: `${period.label} top sellers`,
+      title: "Top-selling items",
+      note: `${distinctItems} sold item${distinctItems === 1 ? "" : "s"} in this report window`,
+      items: Array.isArray(summary.topItems) ? summary.topItems : []
+    }),
+    buildStaffItemSalesCard({
+      label: `${period.label} low sellers`,
+      title: "Low-selling items",
+      note: "Low means lowest among items that still sold in this report window",
+      items: Array.isArray(summary.lowItems) ? summary.lowItems : [],
+      className: "is-low-selling"
+    })
+  ].join("");
+}
+
 function renderStaffDashboardReports(reports = STAFF_STATE.dashboardReports) {
   const reportsCopy = $("#staffDashboardReportsCopy");
   const reportsWrap = $("#staffDashboardReports");
@@ -1371,6 +2048,8 @@ function renderStaffDashboardReports(reports = STAFF_STATE.dashboardReports) {
     if (reportsCopy) reportsCopy.hidden = true;
     reportsWrap.hidden = true;
     reportsWrap.innerHTML = "";
+    renderStaffDashboardAiInsights(null);
+    renderStaffDashboardItemSalesReports(null);
     return;
   }
 
@@ -1392,6 +2071,8 @@ function renderStaffDashboardReports(reports = STAFF_STATE.dashboardReports) {
       );
     })
     .join("");
+  renderStaffDashboardAiInsights(reports);
+  renderStaffDashboardItemSalesReports(STAFF_STATE.itemSalesReports);
 }
 
 function renderStaffOrdersQuickReports(reports = STAFF_STATE.dashboardReports) {
@@ -2499,6 +3180,7 @@ function buildStaffOrderCard(order = {}) {
   const titlePrefix = addonMeta.isAddon ? `${addonMeta.label} - ` : "";
   const customerIdentity = order.customerName || order.customerPhone || sourceMeta.label;
   const familyActionHint = getStaffOrderFamilyActionHint(order, childAddOns);
+  const canManageBilling = isStaffManagerSession();
   const markBilledDisabled =
     !orderId || normalizeStatus(billingStatus) === "billed" ? "disabled" : "";
   const markPaidDisabled =
@@ -2520,6 +3202,28 @@ function buildStaffOrderCard(order = {}) {
   const markFamilyBilledLabel = markFamilyBilledDisabled ? "Full Table Billed" : "Mark Full Table Billed";
   const markFamilyPaidLabel = markFamilyPaidDisabled ? "Full Table Paid" : "Mark Full Table Paid";
   const note = order.note ? `<p class="staff-order-note"><strong>Note:</strong> ${escapeHTML(order.note)}</p>` : "";
+  const billingActionButtons = canManageBilling
+    ? `
+        <button class="staff-btn secondary" type="button" data-staff-mark-billed data-order-id="${safeOrderId}" ${markBilledDisabled}>
+          ${escapeHTML(markBilledLabel)}
+        </button>
+        <button class="staff-btn secondary" type="button" data-staff-mark-paid data-order-id="${safeOrderId}" ${markPaidDisabled}>
+          ${escapeHTML(markPaidLabel)}
+        </button>
+        ${
+          childAddOns.length
+            ? `
+              <button class="staff-btn secondary" type="button" data-staff-mark-family-billed data-order-id="${safeOrderId}" ${markFamilyBilledDisabled}>
+                ${escapeHTML(markFamilyBilledLabel)}
+              </button>
+              <button class="staff-btn secondary" type="button" data-staff-mark-family-paid data-order-id="${safeOrderId}" ${markFamilyPaidDisabled}>
+                ${escapeHTML(markFamilyPaidLabel)}
+              </button>
+            `
+            : ""
+        }
+      `
+    : "";
 
   return `
     <article class="staff-order-card${addonCardClass}${freshOrderCardClass}">
@@ -2567,24 +3271,7 @@ function buildStaffOrderCard(order = {}) {
       ${familyActionHint ? `<p class="staff-order-family-hint">${escapeHTML(familyActionHint)}</p>` : ""}
 
       <div class="staff-order-actions">
-        <button class="staff-btn secondary" type="button" data-staff-mark-billed data-order-id="${safeOrderId}" ${markBilledDisabled}>
-          ${escapeHTML(markBilledLabel)}
-        </button>
-        <button class="staff-btn secondary" type="button" data-staff-mark-paid data-order-id="${safeOrderId}" ${markPaidDisabled}>
-          ${escapeHTML(markPaidLabel)}
-        </button>
-        ${
-          childAddOns.length
-            ? `
-              <button class="staff-btn secondary" type="button" data-staff-mark-family-billed data-order-id="${safeOrderId}" ${markFamilyBilledDisabled}>
-                ${escapeHTML(markFamilyBilledLabel)}
-              </button>
-              <button class="staff-btn secondary" type="button" data-staff-mark-family-paid data-order-id="${safeOrderId}" ${markFamilyPaidDisabled}>
-                ${escapeHTML(markFamilyPaidLabel)}
-              </button>
-            `
-            : ""
-        }
+        ${billingActionButtons}
         <button class="staff-btn secondary" type="button" data-staff-view-bill data-order-id="${safeOrderId}">
           View Bill
         </button>
@@ -3094,7 +3781,10 @@ async function staffFetchJson(url, options = {}) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.message || "Request failed");
+    const error = new Error(data.message || "Request failed");
+    error.status = response.status;
+    error.responseData = data;
+    throw error;
   }
 
   return data;
@@ -3249,7 +3939,10 @@ async function loadStaffOrders({ silent = false } = {}) {
 async function loadStaffDashboardReports({ silent = false } = {}) {
   if (!isStaffManagerSession()) {
     STAFF_STATE.dashboardReports = null;
+    STAFF_STATE.dashboardReportsFreshnessLabel = "";
+    STAFF_STATE.itemSalesReports = null;
     renderStaffDashboardReports(null);
+    renderStaffDashboardItemSalesReports(null);
     renderStaffOrdersQuickReports(null);
     return;
   }
@@ -3258,12 +3951,26 @@ async function loadStaffDashboardReports({ silent = false } = {}) {
     const result = await staffFetchJson(`${STAFF_API_BASE}/orders-reports`);
     STAFF_STATE.dashboardReports =
       result.reports && typeof result.reports === "object" ? result.reports : null;
-    renderStaffDashboardReports(STAFF_STATE.dashboardReports);
-    renderStaffOrdersQuickReports(STAFF_STATE.dashboardReports);
-  } catch (error) {
-    console.warn("Staff dashboard reports load failed:", error);
-    STAFF_STATE.dashboardReports = null;
-    renderStaffDashboardReports(null);
+    try {
+      const itemSalesResult = await staffFetchJson(`${STAFF_API_BASE}/orders-item-sales-reports`);
+      STAFF_STATE.itemSalesReports =
+        itemSalesResult.itemSalesReports && typeof itemSalesResult.itemSalesReports === "object"
+          ? itemSalesResult.itemSalesReports
+          : null;
+      } catch (itemSalesError) {
+        console.warn("Staff item sales reports load failed:", itemSalesError);
+        STAFF_STATE.itemSalesReports = null;
+      }
+      STAFF_STATE.dashboardReportsFreshnessLabel = getStaffLastUpdatedLabel();
+      renderStaffDashboardReports(STAFF_STATE.dashboardReports);
+      renderStaffOrdersQuickReports(STAFF_STATE.dashboardReports);
+    } catch (error) {
+      console.warn("Staff dashboard reports load failed:", error);
+      STAFF_STATE.dashboardReports = null;
+      STAFF_STATE.dashboardReportsFreshnessLabel = "";
+      STAFF_STATE.itemSalesReports = null;
+      renderStaffDashboardReports(null);
+      renderStaffDashboardItemSalesReports(null);
     renderStaffOrdersQuickReports(null);
 
     if (!silent) {
@@ -3579,7 +4286,11 @@ async function handleStaffOrderAction(button, action, actionLabel) {
     await loadStaffOrders();
   } catch (error) {
     console.error(`Staff ${action} failed:`, error);
-    window.alert(error.message || `Failed to ${actionLabel.toLowerCase()}`);
+    const managerAccessMessage =
+      error?.status === 403
+        ? "Manager access is required to update billing or payment from this staff panel."
+        : error.message || `Failed to ${actionLabel.toLowerCase()}`;
+    window.alert(managerAccessMessage);
     button.textContent = originalText;
     button.disabled = false;
   } finally {

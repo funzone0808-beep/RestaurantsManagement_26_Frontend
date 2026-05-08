@@ -49,11 +49,12 @@ function rememberHotelSlug(slug) {
   }
 }
 
-function getRuntimeDefaultHotelSlug() {
-  return (
-    normalizeHotelSlug(window.APP_RUNTIME_CONFIG?.DEFAULT_HOTEL_SLUG) ||
-    getStoredHotelSlug()
-  );
+function getConfiguredDefaultHotelSlug() {
+  return normalizeHotelSlug(window.APP_RUNTIME_CONFIG?.DEFAULT_HOTEL_SLUG);
+}
+
+function getRuntimeLocalFallbackHotelSlug() {
+  return getConfiguredDefaultHotelSlug() || getStoredHotelSlug();
 }
 
 function getDefaultApiBaseUrl() {
@@ -317,6 +318,28 @@ function normalizeThemeTextGroup(rawGroup, allowedKeys, maxLength = 120) {
   }, {});
 }
 
+function normalizeThemeStringList(value, maxLength = 120, maxItems = 6) {
+  const source = Array.isArray(value) ? value : [];
+  const seen = new Set();
+
+  return source.reduce((items, entry) => {
+    if (items.length >= maxItems) {
+      return items;
+    }
+
+    const candidate = normalizeThemeString(entry, maxLength);
+    const normalizedKey = candidate.toLowerCase();
+
+    if (!candidate || seen.has(normalizedKey)) {
+      return items;
+    }
+
+    seen.add(normalizedKey);
+    items.push(candidate);
+    return items;
+  }, []);
+}
+
 function normalizeLoadingScreenConfig(rawLoadingScreen) {
   const loadingScreen = normalizeHotelProfileJsonObject(rawLoadingScreen);
 
@@ -385,6 +408,23 @@ function normalizeTheme(rawTheme) {
     rawTheme.payment?.deliveryCharge,
     null,
     { min: 0, max: 100000 }
+  );
+  const aiAssistantEnabled = normalizeThemeBoolean(rawTheme.aiAssistant?.enabled);
+  const aiAssistantTitle = normalizeThemeString(rawTheme.aiAssistant?.title, 160);
+  const aiAssistantIntro = normalizeThemeString(rawTheme.aiAssistant?.intro, 320);
+  const aiAssistantTone = normalizeThemePreset(rawTheme.aiAssistant?.tone, [
+    "default",
+    "friendly",
+    "formal"
+  ]);
+  const aiAssistantExamplePrompt = normalizeThemeString(
+    rawTheme.aiAssistant?.examplePrompt,
+    160
+  );
+  const aiAssistantStarterPrompts = normalizeThemeStringList(
+    rawTheme.aiAssistant?.starterPrompts,
+    120,
+    6
   );
   const contentSource = isPlainObject(rawTheme.content) ? rawTheme.content : {};
   const navLabels = normalizeThemeTextGroup(
@@ -475,6 +515,41 @@ function normalizeTheme(rawTheme) {
 
     if (deliveryCharge !== null) {
       normalizedTheme.payment.deliveryCharge = deliveryCharge;
+    }
+  }
+
+  if (
+    aiAssistantEnabled !== null ||
+    aiAssistantTitle ||
+    aiAssistantIntro ||
+    aiAssistantTone ||
+    aiAssistantExamplePrompt ||
+    aiAssistantStarterPrompts.length
+  ) {
+    normalizedTheme.aiAssistant = {};
+
+    if (aiAssistantEnabled !== null) {
+      normalizedTheme.aiAssistant.enabled = aiAssistantEnabled;
+    }
+
+    if (aiAssistantTitle) {
+      normalizedTheme.aiAssistant.title = aiAssistantTitle;
+    }
+
+    if (aiAssistantIntro) {
+      normalizedTheme.aiAssistant.intro = aiAssistantIntro;
+    }
+
+    if (aiAssistantTone) {
+      normalizedTheme.aiAssistant.tone = aiAssistantTone;
+    }
+
+    if (aiAssistantExamplePrompt) {
+      normalizedTheme.aiAssistant.examplePrompt = aiAssistantExamplePrompt;
+    }
+
+    if (aiAssistantStarterPrompts.length) {
+      normalizedTheme.aiAssistant.starterPrompts = aiAssistantStarterPrompts;
     }
   }
 
@@ -933,16 +1008,22 @@ const STARTUP_FETCH_OPTIONS = Object.freeze({
 });
 
 async function resolveHotelSlug() {
+  const host = window.location.hostname;
+  const localRuntime = isLocalhost(host);
   const querySlug = normalizeHotelSlug(getHotelSlugFromQuery());
-  if (querySlug) {
+
+  if (querySlug && localRuntime) {
     rememberHotelSlug(querySlug);
     return querySlug;
   }
 
-  const host = window.location.hostname;
-  const fallbackSlug = getRuntimeDefaultHotelSlug();
+  if (querySlug && !localRuntime) {
+    console.warn("Ignoring ?hotel override outside localhost for tenant safety.");
+  }
 
-  if (isLocalhost(host)) {
+  if (localRuntime) {
+    const fallbackSlug = getRuntimeLocalFallbackHotelSlug();
+
     if (fallbackSlug) return fallbackSlug;
     throw new Error("Hotel slug is required. Use ?hotel=your-hotel-slug or set APP_RUNTIME_CONFIG.DEFAULT_HOTEL_SLUG.");
   }
@@ -959,14 +1040,8 @@ async function resolveHotelSlug() {
       return resolvedSlug;
     }
 
-    if (fallbackSlug) return fallbackSlug;
     throw new Error(`No hotel tenant resolved for host ${host}.`);
   } catch (error) {
-    if (fallbackSlug) {
-      console.warn("Falling back to configured hotel slug:", error);
-      return fallbackSlug;
-    }
-
     throw error;
   }
 }

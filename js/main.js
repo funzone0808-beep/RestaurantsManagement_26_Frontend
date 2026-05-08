@@ -61,6 +61,14 @@ let CONFIG = {
   API_BASE_URL:
   window.APP_RUNTIME_CONFIG?.BACKEND_BASE_URL || getDefaultBackendBaseUrl()
 };
+const ALLOW_ORDER_WHATSAPP_FALLBACK_ON_SAVE_FAILURE = getRuntimeBooleanConfig(
+  "ALLOW_ORDER_WHATSAPP_FALLBACK_ON_SAVE_FAILURE",
+  true
+);
+const OPEN_WHATSAPP_AFTER_VERIFIED_ONLINE_PAYMENT = getRuntimeBooleanConfig(
+  "OPEN_WHATSAPP_AFTER_VERIFIED_ONLINE_PAYMENT",
+  false
+);
 let PAYMENT_GATEWAY_READINESS = null;
 let paymentGatewayReadinessPromise = null;
 
@@ -2416,6 +2424,780 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.remove("show"), 2500);
 }
 
+function ensureMenuAssistantStyles() {
+  if (document.getElementById("menuAssistantStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "menuAssistantStyles";
+  style.textContent = `
+    .menu-assistant-card {
+      margin: 1rem 0 1.25rem;
+      padding: 1.05rem;
+      border: 1px solid rgba(255,255,255,0.16);
+      background:
+        linear-gradient(145deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)),
+        rgba(8, 14, 28, 0.94);
+      border-radius: 22px;
+      box-shadow: 0 24px 50px rgba(0,0,0,0.24);
+      backdrop-filter: blur(18px);
+    }
+
+    .menu-assistant-card.is-open {
+      border-color: rgba(255,255,255,0.22);
+      box-shadow: 0 28px 56px rgba(0,0,0,0.28);
+    }
+
+    .menu-assistant-card [hidden] {
+      display: none !important;
+    }
+
+    .menu-assistant-card:not(.is-open) {
+      margin: 0.9rem 0 1.1rem;
+      padding: 0;
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+      backdrop-filter: none;
+    }
+
+    .menu-assistant-card:not(.is-open) .menu-assistant-head {
+      justify-content: flex-start;
+      gap: 0;
+    }
+
+    body:not(.menu-page) .menu-assistant-card:not(.is-open) .menu-assistant-head {
+      gap: 0.65rem;
+      align-items: center;
+    }
+
+    body:not(.menu-page) .menu-assistant-card:not(.is-open) .menu-assistant-head::before {
+      content: "Menu help";
+      display: inline-flex;
+      align-items: center;
+      padding: 0.4rem 0.72rem;
+      border-radius: 999px;
+      border: 1px solid rgba(201, 168, 76, 0.26);
+      background: rgba(201, 168, 76, 0.12);
+      color: #8a6a1d;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .menu-assistant-card:not(.is-open) .menu-assistant-toggle {
+      border-color: rgba(201, 168, 76, 0.42);
+      background: rgba(18, 16, 14, 0.94);
+      color: #fff9ea;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+    }
+
+    .menu-assistant-card:not(.is-open) .menu-assistant-toggle:hover,
+    .menu-assistant-card:not(.is-open) .menu-assistant-toggle:focus-visible {
+      border-color: rgba(232, 208, 138, 0.65);
+      background: rgba(28, 24, 20, 0.98);
+      color: #fff;
+    }
+
+    .menu-assistant-card:not(.is-open) .menu-assistant-head > div {
+      display: none;
+    }
+
+    .menu-assistant-card:not(.is-open) .menu-assistant-copy,
+    .menu-assistant-card:not(.is-open) .menu-assistant-example,
+    .menu-assistant-card:not(.is-open) .menu-assistant-guard-copy,
+    .menu-assistant-card:not(.is-open) .menu-assistant-guard-list,
+    .menu-assistant-card:not(.is-open) .menu-assistant-context {
+      display: none;
+    }
+
+    .menu-assistant-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .menu-assistant-head > div {
+      flex: 1 1 420px;
+      min-width: 0;
+    }
+
+    .menu-assistant-title {
+      margin: 0;
+      font-size: 1.05rem;
+      color: #fff;
+    }
+
+    .menu-assistant-copy {
+      margin: 0.35rem 0 0;
+      color: rgba(255,255,255,0.78);
+      font-size: 0.95rem;
+      max-width: 680px;
+    }
+
+    .menu-assistant-example {
+      margin: 0.45rem 0 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.45rem 0.75rem;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,245,220,0.9);
+      font-size: 0.83rem;
+      line-height: 1.45;
+      max-width: 100%;
+      cursor: pointer;
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+      text-align: left;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    .menu-assistant-example strong {
+      color: rgba(255,255,255,0.96);
+      font-weight: 700;
+    }
+
+    .menu-assistant-example:hover,
+    .menu-assistant-example:focus-visible {
+      border-color: rgba(255,255,255,0.24);
+      background: rgba(255,255,255,0.12);
+      transform: translateY(-1px);
+      outline: none;
+    }
+
+    .menu-assistant-guard-copy {
+      margin: 0.6rem 0 0;
+      color: rgba(255,255,255,0.68);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      max-width: 720px;
+    }
+
+    .menu-assistant-guard-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.7rem;
+    }
+
+    .menu-assistant-context {
+      margin-top: 0.8rem;
+      display: grid;
+      gap: 0.45rem;
+    }
+
+    .menu-assistant-context-pill {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      padding: 0.38rem 0.7rem;
+      border-radius: 999px;
+      border: 1px solid rgba(201, 168, 76, 0.24);
+      background: rgba(201, 168, 76, 0.14);
+      color: #f3deb0;
+      font-size: 0.78rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .menu-assistant-context-copy {
+      margin: 0;
+      color: rgba(255,255,255,0.76);
+      font-size: 0.84rem;
+      line-height: 1.5;
+      max-width: 720px;
+    }
+
+    .menu-assistant-guard-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.38rem 0.68rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.84);
+      font-size: 0.78rem;
+      line-height: 1.2;
+    }
+
+    .menu-assistant-guard-chip.is-supported {
+      border-color: rgba(101, 202, 146, 0.32);
+      background: rgba(101, 202, 146, 0.14);
+      color: #d7ffe5;
+    }
+
+    .menu-assistant-guard-chip.is-limited {
+      border-color: rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.07);
+      color: rgba(255,255,255,0.74);
+    }
+
+    .menu-assistant-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 165px;
+      min-height: 46px;
+      white-space: nowrap;
+      align-self: flex-start;
+      border-color: rgba(255,255,255,0.26);
+      background: rgba(255,255,255,0.09);
+      color: rgba(255,255,255,0.96);
+      font-weight: 600;
+    }
+
+    .menu-assistant-toggle.is-open {
+      border-color: rgba(255,255,255,0.34);
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+    }
+
+    .menu-assistant-toggle:hover,
+    .menu-assistant-toggle:focus-visible {
+      border-color: rgba(255,255,255,0.4);
+      background: rgba(255,255,255,0.16);
+      color: #fff;
+      outline: none;
+    }
+
+    .menu-assistant-body {
+      margin-top: 1rem;
+      display: grid;
+      gap: 0.9rem;
+    }
+
+    .menu-assistant-prompts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+
+    .menu-assistant-prompts-meta {
+      margin: 0 0 -0.2rem;
+      color: rgba(255,255,255,0.62);
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+
+    .menu-assistant-suggestions,
+    .menu-assistant-followups,
+    .menu-assistant-actions {
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .menu-assistant-section-label {
+      margin: 0;
+      color: rgba(255,255,255,0.64);
+      font-size: 0.76rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .menu-assistant-section-body {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+
+    .menu-assistant-chip {
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      padding: 0.65rem 0.85rem;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+    }
+
+    .menu-assistant-chip:hover,
+    .menu-assistant-chip:focus-visible {
+      background: rgba(255,255,255,0.14);
+      border-color: rgba(255,255,255,0.26);
+      transform: translateY(-1px);
+      outline: none;
+    }
+
+    .menu-assistant-chip.is-active-prompt {
+      border-color: rgba(255, 221, 149, 0.42);
+      background: rgba(255, 221, 149, 0.2);
+      color: #fff5d8;
+      box-shadow: 0 0 0 1px rgba(255, 221, 149, 0.18);
+    }
+
+    .menu-assistant-chip.is-active-followup {
+      border-color: rgba(131, 216, 255, 0.38);
+      background: rgba(131, 216, 255, 0.18);
+      color: #e3f8ff;
+      box-shadow: 0 0 0 1px rgba(131, 216, 255, 0.16);
+    }
+
+    .menu-assistant-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.75rem;
+    }
+
+    .menu-assistant-input {
+      width: 100%;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      padding: 0.9rem 1rem;
+      font-size: 0.98rem;
+    }
+
+    .menu-assistant-input::placeholder {
+      color: rgba(255,255,255,0.46);
+    }
+
+    .menu-assistant-char-count {
+      margin: -0.2rem 0 0;
+      text-align: right;
+      color: rgba(255,255,255,0.56);
+      font-size: 0.78rem;
+      line-height: 1.35;
+    }
+
+    .menu-assistant-char-count.is-near-limit {
+      color: rgba(255, 223, 161, 0.92);
+    }
+
+    .menu-assistant-submit-hint {
+      margin: -0.15rem 0 0;
+      text-align: right;
+      color: rgba(255,255,255,0.62);
+      font-size: 0.78rem;
+      line-height: 1.35;
+    }
+
+    .menu-assistant-status {
+      min-height: 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: rgba(255,255,255,0.78);
+      font-size: 0.9rem;
+    }
+
+    .menu-assistant-empty-hint {
+      margin: -0.15rem 0 0;
+      color: rgba(255,255,255,0.62);
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    .menu-assistant-failure-hint {
+      margin: -0.1rem 0 0;
+      padding: 0.72rem 0.84rem;
+      border-radius: 16px;
+      border: 1px dashed rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.76);
+      font-size: 0.83rem;
+      line-height: 1.55;
+    }
+
+    .menu-assistant-retry {
+      display: flex;
+      justify-content: flex-start;
+      margin: -0.15rem 0 0;
+    }
+
+    .menu-assistant-retry-btn {
+      font-size: 0.84rem;
+      padding: 0.5rem 0.78rem;
+    }
+
+    .menu-assistant-status.is-loading {
+      color: rgba(255, 240, 200, 0.94);
+    }
+
+    .menu-assistant-status.is-loading::before {
+      content: "";
+      width: 0.55rem;
+      height: 0.55rem;
+      border-radius: 999px;
+      background: #d7b45c;
+      box-shadow: 0 0 0 0 rgba(215, 180, 92, 0.55);
+      animation: menuAssistantPulse 1.15s ease-in-out infinite;
+      flex: 0 0 auto;
+    }
+
+    @keyframes menuAssistantPulse {
+      0% {
+        transform: scale(0.92);
+        box-shadow: 0 0 0 0 rgba(215, 180, 92, 0.48);
+      }
+      70% {
+        transform: scale(1.08);
+        box-shadow: 0 0 0 0.5rem rgba(215, 180, 92, 0);
+      }
+      100% {
+        transform: scale(0.92);
+        box-shadow: 0 0 0 0 rgba(215, 180, 92, 0);
+      }
+    }
+
+    .menu-assistant-history {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .menu-assistant-history-title {
+      margin: 0;
+      color: rgba(255,255,255,0.72);
+      font-size: 0.82rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .menu-assistant-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+      margin-top: -0.15rem;
+    }
+
+    .menu-assistant-clear-btn {
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.8);
+      font-size: 0.8rem;
+      line-height: 1.2;
+      padding: 0.42rem 0.72rem;
+      cursor: pointer;
+      transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+    }
+
+    .menu-assistant-clear-btn:hover,
+    .menu-assistant-clear-btn:focus-visible {
+      border-color: rgba(255,255,255,0.24);
+      background: rgba(255,255,255,0.12);
+      transform: translateY(-1px);
+      outline: none;
+    }
+
+    .menu-assistant-clear-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.58;
+      transform: none;
+    }
+
+    .menu-assistant-history-list {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .menu-assistant-history-item {
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.06);
+      padding: 0.8rem 0.9rem;
+      display: grid;
+      gap: 0.38rem;
+    }
+
+    .menu-assistant-history-question,
+    .menu-assistant-history-answer {
+      margin: 0;
+      line-height: 1.55;
+      font-size: 0.9rem;
+    }
+
+    .menu-assistant-history-question {
+      color: rgba(255,255,255,0.92);
+    }
+
+    .menu-assistant-history-answer {
+      color: rgba(255,255,255,0.72);
+    }
+
+    .menu-assistant-helper {
+      border-radius: 16px;
+      border: 1px solid rgba(201, 168, 76, 0.2);
+      background: rgba(201, 168, 76, 0.08);
+      padding: 0.95rem 1rem;
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .menu-assistant-helper-title,
+    .menu-assistant-helper-copy {
+      margin: 0;
+    }
+
+    .menu-assistant-helper-title {
+      color: #fff0c8;
+      font-size: 0.92rem;
+    }
+
+    .menu-assistant-helper-copy {
+      color: rgba(255,255,255,0.76);
+      font-size: 0.88rem;
+      line-height: 1.55;
+    }
+
+    .menu-assistant-helper-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: fit-content;
+      min-height: 44px;
+      border-color: rgba(255,255,255,0.26);
+      background: rgba(255,255,255,0.09);
+      color: rgba(255,255,255,0.96);
+      font-weight: 600;
+    }
+
+    .menu-assistant-helper-link:hover,
+    .menu-assistant-helper-link:focus-visible {
+      border-color: rgba(255,255,255,0.4);
+      background: rgba(255,255,255,0.16);
+      color: #fff;
+      outline: none;
+    }
+
+    .menu-assistant-reply {
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.08);
+      padding: 1rem;
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .menu-assistant-reply.is-fresh {
+      animation: menuAssistantReplyGlow 1.3s ease;
+    }
+
+    @keyframes menuAssistantReplyGlow {
+      0% {
+        border-color: rgba(215, 180, 92, 0.42);
+        background: rgba(255,255,255,0.12);
+        box-shadow: 0 0 0 0 rgba(215, 180, 92, 0.24);
+      }
+      55% {
+        border-color: rgba(215, 180, 92, 0.28);
+        background: rgba(255,255,255,0.1);
+        box-shadow: 0 0 0 0.52rem rgba(215, 180, 92, 0);
+      }
+      100% {
+        border-color: rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.08);
+        box-shadow: 0 0 0 0 rgba(215, 180, 92, 0);
+      }
+    }
+
+    .menu-assistant-answer {
+      margin: 0;
+      color: #fff;
+      line-height: 1.65;
+    }
+
+    .menu-assistant-summary {
+      margin: 0;
+      color: #fff0c8;
+      font-size: 0.79rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .menu-assistant-updated {
+      margin: -0.15rem 0 0;
+      color: rgba(255,255,255,0.6);
+      font-size: 0.76rem;
+      line-height: 1.4;
+    }
+
+    .menu-assistant-disclaimer {
+      margin: 0;
+      color: rgba(255,255,255,0.58);
+      font-size: 0.82rem;
+    }
+
+    .menu-assistant-item {
+      min-width: 180px;
+      flex: 1 1 220px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.07);
+      padding: 0.9rem;
+    }
+
+    .menu-assistant-item strong,
+    .menu-assistant-item span {
+      display: block;
+    }
+
+    .menu-assistant-item strong {
+      color: #fff;
+      margin-bottom: 0.25rem;
+    }
+
+    .menu-assistant-item span {
+      color: rgba(255,255,255,0.7);
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    .menu-assistant-empty-result {
+      margin: 0;
+      border-radius: 16px;
+      border: 1px dashed rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.05);
+      padding: 0.85rem 0.95rem;
+      color: rgba(255,255,255,0.74);
+      font-size: 0.87rem;
+      line-height: 1.55;
+    }
+
+    @media (max-width: 768px) {
+      .menu-assistant-form {
+        grid-template-columns: 1fr;
+      }
+
+      .menu-assistant-toggle,
+      .menu-assistant-form .btn {
+        width: 100%;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+function getThemeAiAssistantConfig() {
+  const source =
+    window.APP_STATE?.theme?.aiAssistant &&
+    typeof window.APP_STATE.theme.aiAssistant === "object" &&
+    !Array.isArray(window.APP_STATE.theme.aiAssistant)
+      ? window.APP_STATE.theme.aiAssistant
+      : {};
+  const starterPrompts = Array.isArray(source.starterPrompts)
+    ? source.starterPrompts
+        .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+        .filter(Boolean)
+        .slice(0, 6)
+    : [];
+  const examplePrompt =
+    typeof source.examplePrompt === "string" ? source.examplePrompt.trim() : "";
+
+  return {
+    enabled: source.enabled !== false,
+    title:
+      (typeof source.title === "string" && source.title.trim()) ||
+      "Ask about dishes, budget, and combos",
+    intro:
+      (typeof source.intro === "string" && source.intro.trim()) ||
+      "This helper answers only from the current hotel's live menu and can suggest safe actions like add to cart.",
+    examplePrompt,
+    starterPrompts: starterPrompts.length
+      ? starterPrompts
+      : [
+          "Best veg starter under 300",
+          "Suggest something spicy for 2 people",
+          "Tell me about paneer tikka"
+        ]
+  };
+}
+
+function getMenuAssistantScopeGuardConfig() {
+  const supported = ["Suggestions", "Budgets", "Dish details"];
+
+  if (hasDineInOrderContext()) {
+    return {
+      copy:
+        "Menu help only. For live order status, bill requests, or staff help, please use the regular table-order buttons.",
+      supported,
+      limited: ["Order status", "Bill request", "Staff help"]
+    };
+  }
+
+  return {
+    copy:
+      "Menu help only. For order tracking, payment, reservation, or support, please use the regular site options.",
+    supported,
+    limited: ["Order status", "Payment", "Reservations"]
+  };
+}
+
+function getMenuAssistantDefaultDisclaimer() {
+  if (hasDineInOrderContext()) {
+    return "This assistant is grounded only in the current hotel's active menu and does not handle live order status, bill requests, or staff calls.";
+  }
+
+  return "This assistant is grounded only in the current hotel's active menu and does not handle order tracking, billing, payment, or reservations.";
+}
+
+function getMenuAssistantRuntimeContextMeta(context = getActiveOrderContext()) {
+  if (!hasDineInOrderContext(context)) {
+    return null;
+  }
+
+  const isAddonContext = hasActiveOrderAddonContext(context);
+  const tableLabel = `Table ${context.tableNumber}`;
+
+  return {
+    label: isAddonContext ? `${tableLabel} add-on menu help` : `${tableLabel} menu help`,
+    copy: isAddonContext
+      ? `You are adding more dishes for ${tableLabel}. Smart Waiter can help compare menu items, but the normal add-to-order and table actions still handle the real order flow.`
+      : `Smart Waiter is helping ${tableLabel} with menu questions only. Use the normal table-order buttons for order status, bill requests, or staff help.`,
+    placeholder: isAddonContext
+      ? `Ask for ${tableLabel} add-on suggestions, e.g. a mild side dish`
+      : `Ask for ${tableLabel} menu ideas, e.g. spicy starter for 2`,
+    quickPrompts: isAddonContext
+      ? [
+          "Suggest something light to add",
+          "Suggest a mild starter to add",
+          "Suggest a drink to add for 2 people"
+        ]
+      : [
+          "Suggest a starter to share for 2 people",
+          "Suggest a light dish for this table",
+          "Suggest a drink for 2 people"
+        ]
+  };
+}
+
+function getEffectiveMenuAssistantPrompts(basePrompts = [], context = getActiveOrderContext()) {
+  const normalizedBase = Array.isArray(basePrompts)
+    ? basePrompts
+        .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+        .filter(Boolean)
+    : [];
+  const runtimeContextMeta = getMenuAssistantRuntimeContextMeta(context);
+  const contextPrompts = Array.isArray(runtimeContextMeta?.quickPrompts)
+    ? runtimeContextMeta.quickPrompts
+    : [];
+  const seen = new Set();
+
+  return [...contextPrompts, ...normalizedBase].reduce((prompts, entry) => {
+    if (prompts.length >= 6) {
+      return prompts;
+    }
+
+    const normalizedKey = entry.toLowerCase();
+    if (!entry || seen.has(normalizedKey)) {
+      return prompts;
+    }
+
+    seen.add(normalizedKey);
+    prompts.push(entry);
+    return prompts;
+  }, []);
+}
+
 function openCartDrawer() {
   const drawer = $("#cartDrawer");
   const backdrop = $("#cartBackdrop");
@@ -2752,6 +3534,17 @@ function initMenuAndCart() {
 
   if (!grid || !getMenuCategories().length) return;
 
+  const menuAssistantThemeConfig = getThemeAiAssistantConfig();
+
+  ensureMenuAssistantStyles();
+
+  if (menuAssistantThemeConfig.enabled) {
+    document.getElementById("menuAssistantUnavailableCard")?.remove();
+  } else {
+    document.getElementById("menuAssistantCard")?.remove();
+    ensureMenuAssistantUnavailableCard(menuAssistantThemeConfig);
+  }
+
   const CATEGORY_LABELS = {
     starters: "Starter",
     mains: "Main Course",
@@ -2864,6 +3657,21 @@ function initMenuAndCart() {
   };
   let pendingMenuGridFocusSelectors = [];
   let paymentGatewayScriptPromise = null;
+  const MENU_ASSISTANT_STATE = {
+    loading: false,
+    open: false,
+    activePrompt: "",
+    activeFollowUp: "",
+    lastFailureHint: "",
+    lastFailedPrompt: "",
+    lastTurn: null,
+    history: []
+  };
+  const MENU_ASSISTANT_HISTORY_LIMIT = 4;
+  const menuAssistantPrompts = getEffectiveMenuAssistantPrompts(
+    menuAssistantThemeConfig.starterPrompts,
+    getActiveOrderContext()
+  );
 
   function shouldUsePreviewMode() {
     return menuMode === "preview";
@@ -2918,6 +3726,1470 @@ function initMenuAndCart() {
 
     if (nextTarget instanceof HTMLElement) {
       nextTarget.focus({ preventScroll: true });
+    }
+  }
+
+  function getMenuAssistantContext() {
+    const orderContext = getActiveOrderContext();
+
+    if (!hasDineInOrderContext(orderContext)) {
+      return {};
+    }
+
+    return {
+      orderType: orderContext.orderType || "dine-in",
+      tableNumber: orderContext.tableNumber || "",
+      orderSource: orderContext.orderSource || "qr",
+      addMode: hasActiveOrderAddonContext(orderContext)
+    };
+  }
+
+  function buildMenuAssistantHistoryTurn(question = "", assistant = {}) {
+    const normalizedQuestion =
+      typeof question === "string" ? question.trim().slice(0, 220) : "";
+    const normalizedAnswer =
+      typeof assistant?.answer === "string"
+        ? assistant.answer.trim().slice(0, 900)
+        : "";
+
+    if (!normalizedQuestion || !normalizedAnswer) {
+      return null;
+    }
+
+    return {
+      question: normalizedQuestion,
+      answer: normalizedAnswer
+    };
+  }
+
+  function getMenuAssistantOutOfScopeHelper(assistant = {}) {
+    const isOutOfScope = assistant?.meta?.mode === "out_of_scope";
+    const orderContext = getActiveOrderContext();
+
+    if (!isOutOfScope || !hasDineInOrderContext(orderContext)) {
+      return null;
+    }
+
+    const trackingRecord = getRecentOrderTrackingRecord();
+
+    if (trackingRecord?.url) {
+      return {
+        title: "Use your order tracking page for live table actions",
+        copy:
+          "For live order status, bill requests, or staff help, open your current order tracking page. That page already has the normal table buttons for those actions.",
+        linkUrl: trackingRecord.url,
+        linkLabel: trackingRecord.orderId
+          ? `Open tracking for order #${trackingRecord.orderId}`
+          : "Open order tracking"
+      };
+    }
+
+    return {
+      title: "Use the tracking link after placing the order",
+      copy:
+        "For live order status, bill requests, or staff help, use the regular order tracking link after this table order is placed. That tracking page contains the normal table buttons for those actions.",
+      linkUrl: "",
+      linkLabel: ""
+    };
+  }
+
+  function getMenuAssistantActionLabel(action = {}) {
+    const actionType =
+      typeof action?.type === "string" ? action.type.trim() : "";
+    const fallbackLabel =
+      typeof action?.label === "string" && action.label.trim()
+        ? action.label.trim()
+        : "Continue";
+    const orderContext = getActiveOrderContext();
+    const isDineIn = hasDineInOrderContext(orderContext);
+    const isAddon = hasActiveOrderAddonContext(orderContext);
+    const menuItem = action?.itemId ? findMenuItemById(action.itemId) : null;
+    const itemName =
+      typeof menuItem?.name === "string" && menuItem.name.trim()
+        ? menuItem.name.trim()
+        : "";
+
+    if (actionType === "add_to_cart") {
+      if (isAddon) {
+        return itemName
+          ? `Add ${itemName} to this table order`
+          : "Add to this table order";
+      }
+
+      if (isDineIn) {
+        return itemName
+          ? `Add ${itemName} to this table cart`
+          : "Add to this table cart";
+      }
+    }
+
+    if (actionType === "open_cart") {
+      if (isDineIn) {
+        return "Open this table cart";
+      }
+    }
+
+    if (actionType === "view_full_menu") {
+      if (isAddon) {
+        return "Browse full add-on menu";
+      }
+
+      if (isDineIn) {
+        return "Browse full table menu";
+      }
+    }
+
+    return fallbackLabel;
+  }
+
+  function ensureMenuAssistantUnavailableCard(config = menuAssistantThemeConfig) {
+    let card = document.getElementById("menuAssistantUnavailableCard");
+
+    if (!card) {
+      card = document.createElement("section");
+      card.id = "menuAssistantUnavailableCard";
+      card.className = "menu-assistant-card glass-card";
+      card.setAttribute("aria-label", "Smart Waiter unavailable");
+      card.innerHTML = `
+        <div class="menu-assistant-head">
+          <div>
+            <p class="section-eyebrow">Smart Waiter</p>
+            <h3 class="menu-assistant-title">${escapeHTML(config.title || "Smart Waiter")}</h3>
+            <p class="menu-assistant-copy">This hotel has Smart Waiter turned off right now. You can still browse the live menu, add items to cart, and order normally.</p>
+            <p class="menu-assistant-guard-copy">Menu browsing, cart, checkout, QR ordering, and the rest of the page continue to work as usual.</p>
+          </div>
+          <span class="menu-assistant-guard-chip is-limited">Currently unavailable</span>
+        </div>
+      `;
+
+      const assistantAnchor = scrollHint || grid;
+      assistantAnchor.parentElement.insertBefore(card, assistantAnchor);
+    }
+
+    return card;
+  }
+
+  function ensureMenuAssistantElements(config = menuAssistantThemeConfig) {
+    let card = document.getElementById("menuAssistantCard");
+    const scopeGuard = getMenuAssistantScopeGuardConfig();
+    const runtimeContextMeta = getMenuAssistantRuntimeContextMeta();
+
+    if (!card) {
+      card = document.createElement("section");
+      card.id = "menuAssistantCard";
+      card.className = "menu-assistant-card glass-card";
+      card.setAttribute("aria-label", "Smart menu assistant");
+      card.innerHTML = `
+        <div class="menu-assistant-head">
+          <div>
+            <p class="section-eyebrow">Smart Waiter</p>
+            <h3 class="menu-assistant-title">${escapeHTML(config.title || "Ask about dishes, budget, and combos")}</h3>
+            <p class="menu-assistant-copy">${escapeHTML(config.intro || "This helper answers only from the current hotel's live menu and can suggest safe actions like add to cart.")}</p>
+            ${
+              config.examplePrompt
+                ? `<button type="button" id="menuAssistantExamplePrompt" class="menu-assistant-example" data-assistant-example="${escapeAttr(config.examplePrompt)}"><strong>Try asking:</strong> <span>${escapeHTML(config.examplePrompt)}</span></button>`
+                : ""
+            }
+            <p class="menu-assistant-guard-copy">${escapeHTML(scopeGuard.copy)}</p>
+            <div class="menu-assistant-guard-list" aria-label="Smart Waiter scope">
+              ${scopeGuard.supported
+                .map(
+                  (label) =>
+                    `<span class="menu-assistant-guard-chip is-supported">${escapeHTML(label)}</span>`
+                )
+                .join("")}
+              ${scopeGuard.limited
+                .map(
+                  (label) =>
+                    `<span class="menu-assistant-guard-chip is-limited">${escapeHTML(label)}</span>`
+                )
+                .join("")}
+            </div>
+            ${
+              runtimeContextMeta
+                ? `
+              <div class="menu-assistant-context">
+                <span class="menu-assistant-context-pill">${escapeHTML(runtimeContextMeta.label)}</span>
+                <p class="menu-assistant-context-copy">${escapeHTML(runtimeContextMeta.copy)}</p>
+              </div>
+            `
+                : ""
+            }
+          </div>
+          <button type="button" id="menuAssistantToggle" class="btn btn-outline menu-assistant-toggle" >Open Smart Waiter</button>
+        </div>
+        <div id="menuAssistantBody" class="menu-assistant-body" hidden>
+          <p id="menuAssistantPromptsMeta" class="menu-assistant-prompts-meta" hidden></p>
+          <div id="menuAssistantPrompts" class="menu-assistant-prompts"></div>
+          <form id="menuAssistantForm" class="menu-assistant-form">
+            <input
+              id="menuAssistantInput"
+              class="menu-assistant-input"
+              type="text"
+              maxlength="500"
+              placeholder="${escapeAttr(runtimeContextMeta?.placeholder || "Ask a menu question, e.g. best veg starter under 300")}"
+              aria-label="Ask the menu assistant"
+            />
+            <button type="submit" id="menuAssistantSubmit" class="btn btn-primary">Ask</button>
+          </form>
+          <p id="menuAssistantCharCount" class="menu-assistant-char-count" hidden></p>
+          <p id="menuAssistantSubmitHint" class="menu-assistant-submit-hint" hidden></p>
+          <p id="menuAssistantEmptyHint" class="menu-assistant-empty-hint" hidden></p>
+          <p id="menuAssistantStatus" class="menu-assistant-status" aria-live="polite"></p>
+          <p id="menuAssistantFailureHint" class="menu-assistant-failure-hint" hidden></p>
+          <div id="menuAssistantRetry" class="menu-assistant-retry" hidden>
+            <button type="button" id="menuAssistantRetryBtn" class="menu-assistant-chip menu-assistant-retry-btn">
+              Retry last question
+            </button>
+          </div>
+          <div id="menuAssistantToolbar" class="menu-assistant-toolbar" hidden>
+            <button type="button" id="menuAssistantAskAgainBtn" class="menu-assistant-clear-btn" hidden>
+              Ask again
+            </button>
+            <button type="button" id="menuAssistantCopyBtn" class="menu-assistant-clear-btn" hidden>
+              Copy answer
+            </button>
+            <button type="button" id="menuAssistantClearBtn" class="menu-assistant-clear-btn">
+              Clear chat
+            </button>
+          </div>
+          <div id="menuAssistantHistory" class="menu-assistant-history" hidden>
+            <p class="menu-assistant-history-title">Recent menu chat</p>
+            <div id="menuAssistantHistoryList" class="menu-assistant-history-list"></div>
+          </div>
+          <div id="menuAssistantHelper" class="menu-assistant-helper" hidden>
+            <p id="menuAssistantHelperTitle" class="menu-assistant-helper-title"></p>
+            <p id="menuAssistantHelperCopy" class="menu-assistant-helper-copy"></p>
+            <a
+              id="menuAssistantHelperLink"
+              class="btn btn-outline menu-assistant-helper-link"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+            >Open order tracking</a>
+          </div>
+          <div id="menuAssistantReply" class="menu-assistant-reply" hidden>
+            <p id="menuAssistantSummary" class="menu-assistant-summary" hidden></p>
+            <p id="menuAssistantUpdated" class="menu-assistant-updated" hidden></p>
+            <p id="menuAssistantAnswer" class="menu-assistant-answer"></p>
+            <div id="menuAssistantSuggestions" class="menu-assistant-suggestions"></div>
+            <div id="menuAssistantFollowUps" class="menu-assistant-followups"></div>
+            <div id="menuAssistantActions" class="menu-assistant-actions"></div>
+            <p id="menuAssistantDisclaimer" class="menu-assistant-disclaimer"></p>
+          </div>
+        </div>
+      `;
+
+      const assistantAnchor = scrollHint || grid;
+      assistantAnchor.parentElement.insertBefore(card, assistantAnchor);
+    }
+
+    return {
+      card,
+      toggleBtn: $("#menuAssistantToggle"),
+      exampleBtn: $("#menuAssistantExamplePrompt"),
+      body: $("#menuAssistantBody"),
+      promptsMeta: $("#menuAssistantPromptsMeta"),
+      promptsWrap: $("#menuAssistantPrompts"),
+      form: $("#menuAssistantForm"),
+      input: $("#menuAssistantInput"),
+      submitBtn: $("#menuAssistantSubmit"),
+      charCount: $("#menuAssistantCharCount"),
+      submitHint: $("#menuAssistantSubmitHint"),
+      emptyHint: $("#menuAssistantEmptyHint"),
+      status: $("#menuAssistantStatus"),
+      failureHint: $("#menuAssistantFailureHint"),
+      retry: $("#menuAssistantRetry"),
+      retryBtn: $("#menuAssistantRetryBtn"),
+      toolbar: $("#menuAssistantToolbar"),
+      askAgainBtn: $("#menuAssistantAskAgainBtn"),
+      copyBtn: $("#menuAssistantCopyBtn"),
+      clearBtn: $("#menuAssistantClearBtn"),
+      history: $("#menuAssistantHistory"),
+      historyList: $("#menuAssistantHistoryList"),
+      helper: $("#menuAssistantHelper"),
+      helperTitle: $("#menuAssistantHelperTitle"),
+      helperCopy: $("#menuAssistantHelperCopy"),
+      helperLink: $("#menuAssistantHelperLink"),
+      reply: $("#menuAssistantReply"),
+      summary: $("#menuAssistantSummary"),
+      updated: $("#menuAssistantUpdated"),
+      answer: $("#menuAssistantAnswer"),
+      suggestions: $("#menuAssistantSuggestions"),
+      followUps: $("#menuAssistantFollowUps"),
+      actions: $("#menuAssistantActions"),
+      disclaimer: $("#menuAssistantDisclaimer"),
+    };
+  }
+
+  const menuAssistant = menuAssistantThemeConfig.enabled
+    ? ensureMenuAssistantElements(menuAssistantThemeConfig)
+    : null;
+  let menuAssistantStatusResetTimer = null;
+  let menuAssistantMobileNudgeTimer = null;
+  let menuAssistantReplyHighlightTimer = null;
+  let menuAssistantReplyUpdatedTimer = null;
+  const MENU_ASSISTANT_STATUS_CALM_DELAY_MS = 2600;
+  const MENU_ASSISTANT_MOBILE_NUDGE_DELAY_MS = 90;
+  const MENU_ASSISTANT_REPLY_HIGHLIGHT_MS = 1400;
+  const MENU_ASSISTANT_REPLY_UPDATED_PROMOTION_MS = 14000;
+
+  function getMenuAssistantSessionStorageKey(
+    hotelSlug = getActiveHotelSlug(),
+    orderContext = getActiveOrderContext()
+  ) {
+    const normalizedHotelSlug = String(hotelSlug || "").trim();
+    if (!normalizedHotelSlug) return "";
+
+    const pageScope = document.body.classList.contains("menu-page")
+      ? "full-menu"
+      : "home-menu";
+    const contextScope = hasActiveOrderAddonContext(orderContext)
+      ? `addon:${orderContext.tableNumber || "table"}`
+      : hasDineInOrderContext(orderContext)
+        ? `table:${orderContext.tableNumber || "table"}`
+        : "website";
+
+    return `menuAssistantOpen:${normalizedHotelSlug}:${pageScope}:${contextScope}`;
+  }
+
+  function getStoredMenuAssistantOpenPreference() {
+    const storageKey = getMenuAssistantSessionStorageKey();
+    if (!storageKey) return false;
+
+    try {
+      return sessionStorage.getItem(storageKey) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function storeMenuAssistantOpenPreference(isOpen) {
+    const storageKey = getMenuAssistantSessionStorageKey();
+    if (!storageKey) return;
+
+    try {
+      sessionStorage.setItem(storageKey, isOpen ? "1" : "0");
+    } catch {
+      // Smart Waiter open state memory is best-effort only.
+    }
+  }
+
+  function restoreMenuAssistantOpenPreference() {
+    if (!menuAssistant) return;
+
+    const shouldOpen = getStoredMenuAssistantOpenPreference();
+    const canRestore =
+      menuAssistant.card?.isConnected &&
+      menuAssistant.toggleBtn?.isConnected &&
+      menuAssistant.body?.isConnected;
+
+    if (!canRestore) {
+      setMenuAssistantOpen(false, { focusInput: false });
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      if (
+        !menuAssistant?.card?.isConnected ||
+        !menuAssistant?.toggleBtn?.isConnected ||
+        !menuAssistant?.body?.isConnected
+      ) {
+        return;
+      }
+
+      setMenuAssistantOpen(shouldOpen, { focusInput: false });
+    });
+  }
+
+  function syncMenuAssistantOpenStateFromDom() {
+    if (!menuAssistant?.body || !menuAssistant?.toggleBtn || !menuAssistant?.card) {
+      return MENU_ASSISTANT_STATE.open;
+    }
+
+    const domOpen = !menuAssistant.body.hidden;
+    const ariaExpandedOpen = menuAssistant.toggleBtn.getAttribute("aria-expanded") === "true";
+    const cardOpen = menuAssistant.card.classList.contains("is-open");
+    const toggleOpen = menuAssistant.toggleBtn.classList.contains("is-open");
+
+    if (
+      MENU_ASSISTANT_STATE.open !== domOpen ||
+      ariaExpandedOpen !== domOpen ||
+      cardOpen !== domOpen ||
+      toggleOpen !== domOpen
+    ) {
+      setMenuAssistantOpen(domOpen, { focusInput: false });
+    }
+
+    return domOpen;
+  }
+
+  function setMenuAssistantOpen(nextOpen, { focusInput = true } = {}) {
+    if (!menuAssistant) return;
+    MENU_ASSISTANT_STATE.open = !!nextOpen;
+    if (!MENU_ASSISTANT_STATE.open) {
+      setMenuAssistantActivePrompt("");
+      setMenuAssistantActiveFollowUp("");
+      clearMenuAssistantMobileNudgeTimer();
+      clearMenuAssistantReplyHighlight();
+    }
+    storeMenuAssistantOpenPreference(MENU_ASSISTANT_STATE.open);
+    menuAssistant.body.toggleAttribute("hidden", !MENU_ASSISTANT_STATE.open);
+    menuAssistant.card.classList.toggle("is-open", MENU_ASSISTANT_STATE.open);
+    menuAssistant.toggleBtn.classList.toggle("is-open", MENU_ASSISTANT_STATE.open);
+    const toggleLabel = MENU_ASSISTANT_STATE.open
+      ? "Hide Smart Waiter"
+      : "Open Smart Waiter";
+    menuAssistant.toggleBtn.textContent = toggleLabel;
+    menuAssistant.toggleBtn.setAttribute("aria-label", toggleLabel);
+    menuAssistant.toggleBtn.setAttribute("aria-expanded", MENU_ASSISTANT_STATE.open ? "true" : "false");
+    menuAssistant.toggleBtn.title = toggleLabel;
+
+    if (MENU_ASSISTANT_STATE.open && focusInput) {
+      menuAssistant.input.focus({ preventScroll: true });
+    }
+
+    syncMenuAssistantEmptyHint();
+    syncMenuAssistantCharCount();
+    syncMenuAssistantSubmitHint();
+    syncMenuAssistantFailureHint();
+  }
+
+  function getMenuAssistantLoadingMessage(context = getActiveOrderContext()) {
+    if (hasActiveOrderAddonContext(context)) {
+      return `Thinking about the best add-on menu options for Table ${context.tableNumber || ""}...`.trim();
+    }
+
+    if (hasDineInOrderContext(context)) {
+      return `Thinking about the current menu for Table ${context.tableNumber || ""}...`.trim();
+    }
+
+    return "Thinking about the current menu...";
+  }
+
+  function getMenuAssistantEmptyHintText() {
+    const hasExample = Boolean(menuAssistantThemeConfig.examplePrompt);
+
+    if (hasExample) {
+      return "Need an idea? Tap the welcome example above or use one of the quick menu prompts.";
+    }
+
+    return "Need an idea? Use one of the quick menu prompts or type your own menu question.";
+  }
+
+  function setMenuAssistantLoading(nextLoading, message = "") {
+    if (!menuAssistant) return;
+    MENU_ASSISTANT_STATE.loading = !!nextLoading;
+    if (MENU_ASSISTANT_STATE.loading) {
+      clearMenuAssistantStatusResetTimer();
+      clearMenuAssistantMobileNudgeTimer();
+      clearMenuAssistantReplyHighlight();
+      clearMenuAssistantReplyUpdatedTimer();
+    } else {
+      setMenuAssistantActivePrompt("");
+      setMenuAssistantActiveFollowUp("");
+    }
+    menuAssistant.submitBtn.disabled = MENU_ASSISTANT_STATE.loading;
+    menuAssistant.input.disabled = MENU_ASSISTANT_STATE.loading;
+    menuAssistant.toggleBtn.disabled = MENU_ASSISTANT_STATE.loading;
+    menuAssistant.submitBtn.textContent = MENU_ASSISTANT_STATE.loading ? "Thinking..." : "Ask";
+    menuAssistant.body.setAttribute("aria-busy", MENU_ASSISTANT_STATE.loading ? "true" : "false");
+    menuAssistant.status.classList.toggle("is-loading", MENU_ASSISTANT_STATE.loading);
+    if (menuAssistant.clearBtn) {
+      menuAssistant.clearBtn.disabled = MENU_ASSISTANT_STATE.loading;
+    }
+    if (menuAssistant.askAgainBtn) {
+      menuAssistant.askAgainBtn.disabled =
+        MENU_ASSISTANT_STATE.loading ||
+        menuAssistant.askAgainBtn.hidden;
+    }
+    if (menuAssistant.copyBtn) {
+      menuAssistant.copyBtn.disabled =
+        MENU_ASSISTANT_STATE.loading ||
+        menuAssistant.copyBtn.hidden;
+    }
+    if (menuAssistant.retryBtn) {
+      menuAssistant.retryBtn.disabled = MENU_ASSISTANT_STATE.loading;
+    }
+    menuAssistant.status.textContent = message;
+    syncMenuAssistantEmptyHint();
+    syncMenuAssistantFailureHint();
+    syncMenuAssistantRetry();
+    syncMenuAssistantSubmitHint();
+  }
+
+  function syncMenuAssistantEmptyHint() {
+    if (!menuAssistant?.emptyHint) return;
+
+    const shouldShow =
+      !MENU_ASSISTANT_STATE.loading &&
+      MENU_ASSISTANT_STATE.open &&
+      !String(menuAssistant.input?.value || "").trim();
+
+    menuAssistant.emptyHint.hidden = !shouldShow;
+    menuAssistant.emptyHint.textContent = shouldShow
+      ? getMenuAssistantEmptyHintText()
+      : "";
+  }
+
+  function syncMenuAssistantCharCount() {
+    if (!menuAssistant?.charCount) return;
+
+    const currentValue = String(menuAssistant.input?.value || "");
+    const maxLength = Number(menuAssistant.input?.maxLength || 500) > 0
+      ? Number(menuAssistant.input.maxLength)
+      : 500;
+    const currentLength = currentValue.length;
+    const shouldShow = MENU_ASSISTANT_STATE.open;
+
+    menuAssistant.charCount.hidden = !shouldShow;
+    menuAssistant.charCount.textContent = `${currentLength} / ${maxLength} characters`;
+    menuAssistant.charCount.classList.toggle(
+      "is-near-limit",
+      maxLength - currentLength <= 80
+    );
+  }
+
+  function syncMenuAssistantSubmitHint() {
+    if (!menuAssistant?.submitHint) return;
+
+    const hasInputValue = !!String(menuAssistant.input?.value || "").trim();
+    const shouldShow =
+      MENU_ASSISTANT_STATE.open &&
+      !MENU_ASSISTANT_STATE.loading &&
+      hasInputValue;
+
+    menuAssistant.submitHint.hidden = !shouldShow;
+    menuAssistant.submitHint.textContent = shouldShow
+      ? "Press Enter to ask Smart Waiter."
+      : "";
+
+    if (menuAssistant.submitBtn) {
+      menuAssistant.submitBtn.title = shouldShow
+        ? "Press Enter to ask Smart Waiter"
+        : "Ask Smart Waiter";
+    }
+  }
+
+  function getMenuAssistantCalmStatusMessage(context = getActiveOrderContext()) {
+    if (hasActiveOrderAddonContext(context) && context?.tableNumber) {
+      return `Smart Waiter is ready with more add-on ideas for Table ${context.tableNumber}.`;
+    }
+
+    if (hasDineInOrderContext(context) && context?.tableNumber) {
+      return `Smart Waiter is ready with more menu ideas for Table ${context.tableNumber}.`;
+    }
+
+    return "Smart Waiter is ready for another menu question.";
+  }
+
+  function clearMenuAssistantStatusResetTimer() {
+    if (!menuAssistantStatusResetTimer) return;
+
+    window.clearTimeout(menuAssistantStatusResetTimer);
+    menuAssistantStatusResetTimer = null;
+  }
+
+  function isMenuAssistantCompactViewport() {
+    if (typeof window.matchMedia === "function") {
+      return window.matchMedia("(max-width: 768px)").matches;
+    }
+
+    return window.innerWidth <= 768;
+  }
+
+  function clearMenuAssistantMobileNudgeTimer() {
+    if (!menuAssistantMobileNudgeTimer) return;
+
+    window.clearTimeout(menuAssistantMobileNudgeTimer);
+    menuAssistantMobileNudgeTimer = null;
+  }
+
+  function clearMenuAssistantReplyHighlight() {
+    if (menuAssistantReplyHighlightTimer) {
+      window.clearTimeout(menuAssistantReplyHighlightTimer);
+      menuAssistantReplyHighlightTimer = null;
+    }
+
+    if (menuAssistant?.reply) {
+      menuAssistant.reply.classList.remove("is-fresh");
+    }
+  }
+
+  function triggerMenuAssistantReplyHighlight() {
+    if (!menuAssistant?.reply) return;
+
+    clearMenuAssistantReplyHighlight();
+    void menuAssistant.reply.offsetWidth;
+    menuAssistant.reply.classList.add("is-fresh");
+
+    menuAssistantReplyHighlightTimer = window.setTimeout(() => {
+      menuAssistantReplyHighlightTimer = null;
+      menuAssistant.reply?.classList.remove("is-fresh");
+    }, MENU_ASSISTANT_REPLY_HIGHLIGHT_MS);
+  }
+
+  function scheduleMenuAssistantMobileNudge(
+    targetElement,
+    { block = "nearest" } = {}
+  ) {
+    if (!menuAssistant || !targetElement || !isMenuAssistantCompactViewport()) {
+      return;
+    }
+
+    clearMenuAssistantMobileNudgeTimer();
+    menuAssistantMobileNudgeTimer = window.setTimeout(() => {
+      menuAssistantMobileNudgeTimer = null;
+
+      if (!menuAssistant || !MENU_ASSISTANT_STATE.open) {
+        return;
+      }
+
+      const element = targetElement instanceof HTMLElement ? targetElement : null;
+
+      if (!element || element.hidden || !document.body.contains(element)) {
+        return;
+      }
+
+      element.scrollIntoView({
+        behavior: "smooth",
+        block,
+        inline: "nearest"
+      });
+    }, MENU_ASSISTANT_MOBILE_NUDGE_DELAY_MS);
+  }
+
+  function setMenuAssistantStatusMessage(
+    message = "",
+    {
+      calmAfterMs = 0,
+      calmMessage = getMenuAssistantCalmStatusMessage()
+    } = {}
+  ) {
+    if (!menuAssistant?.status) return;
+
+    clearMenuAssistantStatusResetTimer();
+    menuAssistant.status.textContent = message;
+
+    if (calmAfterMs <= 0) {
+      return;
+    }
+
+    const sourceMessage = String(message || "");
+    menuAssistantStatusResetTimer = window.setTimeout(() => {
+      menuAssistantStatusResetTimer = null;
+
+      if (!menuAssistant || MENU_ASSISTANT_STATE.loading || !MENU_ASSISTANT_STATE.open) {
+        return;
+      }
+
+      if (String(menuAssistant.status.textContent || "") !== sourceMessage) {
+        return;
+      }
+
+      menuAssistant.status.textContent = calmMessage;
+    }, calmAfterMs);
+  }
+
+  function syncMenuAssistantRetry() {
+    if (!menuAssistant?.retry) return;
+
+    const shouldShow =
+      !MENU_ASSISTANT_STATE.loading &&
+      MENU_ASSISTANT_STATE.open &&
+      !!String(MENU_ASSISTANT_STATE.lastFailedPrompt || "").trim();
+
+    menuAssistant.retry.hidden = !shouldShow;
+
+    if (menuAssistant.retryBtn) {
+      menuAssistant.retryBtn.disabled = MENU_ASSISTANT_STATE.loading;
+      menuAssistant.retryBtn.textContent = "Retry last question";
+    }
+  }
+
+  function getMenuAssistantFailureHintText() {
+    const protocol = String(window.location?.protocol || "").toLowerCase();
+    const hostname = String(window.location?.hostname || "").toLowerCase();
+
+    if (protocol === "file:") {
+      return "Local testing tip: this page is running from a local file. Make sure the backend server is running and the Smart Waiter API base URL is reachable before retrying.";
+    }
+
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "Local testing tip: make sure your backend server is running and reachable before retrying Smart Waiter.";
+    }
+
+    return "";
+  }
+
+  function syncMenuAssistantFailureHint() {
+    if (!menuAssistant?.failureHint) return;
+
+    const hint = String(MENU_ASSISTANT_STATE.lastFailureHint || "").trim();
+    const shouldShow =
+      !MENU_ASSISTANT_STATE.loading &&
+      MENU_ASSISTANT_STATE.open &&
+      !!hint;
+
+    menuAssistant.failureHint.hidden = !shouldShow;
+    menuAssistant.failureHint.textContent = shouldShow ? hint : "";
+  }
+
+  function clearMenuAssistantFailureHint() {
+    if (!MENU_ASSISTANT_STATE.lastFailureHint) return;
+
+    MENU_ASSISTANT_STATE.lastFailureHint = "";
+    syncMenuAssistantFailureHint();
+  }
+
+  function handleMenuAssistantEscape(event) {
+    if (!menuAssistant || event.key !== "Escape" || !MENU_ASSISTANT_STATE.open) {
+      return;
+    }
+
+    const target = event.target instanceof HTMLElement ? event.target : null;
+
+    if (!target || !menuAssistant.card.contains(target)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const hasInputValue = Boolean(String(menuAssistant.input?.value || "").trim());
+
+    if (MENU_ASSISTANT_STATE.loading || hasInputValue) {
+      return;
+    }
+
+    setMenuAssistantOpen(false);
+    setMenuAssistantStatusMessage("Smart Waiter closed. Open it anytime.");
+    menuAssistant.toggleBtn.focus({ preventScroll: true });
+  }
+
+  function renderMenuAssistantConversationControls() {
+    if (!menuAssistant) return;
+
+    const hasHistory = Array.isArray(MENU_ASSISTANT_STATE.history) && MENU_ASSISTANT_STATE.history.length > 0;
+    const hasConversation = Boolean(MENU_ASSISTANT_STATE.lastTurn) || hasHistory;
+    const hasAskAgainableReply =
+      menuAssistant.reply &&
+      !menuAssistant.reply.hidden &&
+      !!String(MENU_ASSISTANT_STATE.lastTurn?.question || "").trim();
+    const hasCopyableReply =
+      menuAssistant.reply &&
+      !menuAssistant.reply.hidden &&
+      !!String(menuAssistant.answer?.textContent || "").trim();
+
+    if (menuAssistant.toolbar) {
+      menuAssistant.toolbar.hidden = !hasConversation;
+    }
+
+    if (menuAssistant.askAgainBtn) {
+      menuAssistant.askAgainBtn.hidden = !hasAskAgainableReply;
+      menuAssistant.askAgainBtn.disabled =
+        MENU_ASSISTANT_STATE.loading || !hasAskAgainableReply;
+    }
+
+    if (menuAssistant.copyBtn) {
+      menuAssistant.copyBtn.hidden = !hasCopyableReply;
+      menuAssistant.copyBtn.disabled = MENU_ASSISTANT_STATE.loading || !hasCopyableReply;
+    }
+
+    if (menuAssistant.clearBtn) {
+      menuAssistant.clearBtn.disabled = MENU_ASSISTANT_STATE.loading;
+    }
+  }
+
+  function renderMenuAssistantPrompts() {
+    if (!menuAssistant) return;
+    const promptCount = Array.isArray(menuAssistantPrompts)
+      ? menuAssistantPrompts.length
+      : 0;
+
+    if (menuAssistant.promptsMeta) {
+      if (promptCount > 0) {
+        menuAssistant.promptsMeta.textContent =
+          promptCount === 1
+            ? "1 quick menu prompt is ready."
+            : `${promptCount} quick menu prompts are ready.`;
+        menuAssistant.promptsMeta.hidden = false;
+      } else {
+        menuAssistant.promptsMeta.textContent = "";
+        menuAssistant.promptsMeta.hidden = true;
+      }
+    }
+
+    menuAssistant.promptsWrap.innerHTML = menuAssistantPrompts
+      .map(
+        (prompt) => `
+          <button
+            type="button"
+            class="menu-assistant-chip${MENU_ASSISTANT_STATE.activePrompt === prompt ? " is-active-prompt" : ""}"
+            data-assistant-prompt="${escapeAttr(prompt)}"
+            aria-pressed="${MENU_ASSISTANT_STATE.activePrompt === prompt ? "true" : "false"}"
+          >
+            ${escapeHTML(prompt)}
+          </button>
+        `
+      )
+      .join("");
+  }
+
+  function setMenuAssistantActivePrompt(prompt = "") {
+    const normalizedPrompt = String(prompt || "").trim();
+    if (MENU_ASSISTANT_STATE.activePrompt === normalizedPrompt) {
+      return;
+    }
+
+    MENU_ASSISTANT_STATE.activePrompt = normalizedPrompt;
+    renderMenuAssistantPrompts();
+  }
+
+  function syncMenuAssistantActiveFollowUp() {
+    if (!menuAssistant?.followUps) return;
+
+    const normalizedFollowUp = String(MENU_ASSISTANT_STATE.activeFollowUp || "").trim();
+    menuAssistant.followUps
+      .querySelectorAll("[data-assistant-followup]")
+      .forEach((button) => {
+        const isActive =
+          String(button.dataset.assistantFollowup || "").trim() === normalizedFollowUp &&
+          !!normalizedFollowUp;
+        button.classList.toggle("is-active-followup", isActive);
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+  }
+
+  function setMenuAssistantActiveFollowUp(prompt = "") {
+    const normalizedPrompt = String(prompt || "").trim();
+    if (MENU_ASSISTANT_STATE.activeFollowUp === normalizedPrompt) {
+      return;
+    }
+
+    MENU_ASSISTANT_STATE.activeFollowUp = normalizedPrompt;
+    syncMenuAssistantActiveFollowUp();
+  }
+
+  function renderMenuAssistantHistory() {
+    if (!menuAssistant) return;
+
+    const turns = Array.isArray(MENU_ASSISTANT_STATE.history)
+      ? MENU_ASSISTANT_STATE.history
+      : [];
+
+    menuAssistant.history.hidden = !turns.length;
+    menuAssistant.historyList.innerHTML = turns
+      .map(
+        (turn) => `
+          <article class="menu-assistant-history-item">
+            <p class="menu-assistant-history-question"><strong>You asked:</strong> ${escapeHTML(turn.question || "")}</p>
+            <p class="menu-assistant-history-answer"><strong>Smart Waiter:</strong> ${escapeHTML(turn.answer || "")}</p>
+          </article>
+        `
+      )
+      .join("");
+
+    renderMenuAssistantConversationControls();
+  }
+
+  function commitMenuAssistantTurn(question = "", assistant = {}) {
+    if (!menuAssistant) return;
+
+    const nextTurn = buildMenuAssistantHistoryTurn(question, assistant);
+
+    if (!nextTurn) {
+      return;
+    }
+
+    if (MENU_ASSISTANT_STATE.lastTurn) {
+      MENU_ASSISTANT_STATE.history = [
+        MENU_ASSISTANT_STATE.lastTurn,
+        ...MENU_ASSISTANT_STATE.history
+      ].slice(0, MENU_ASSISTANT_HISTORY_LIMIT);
+    }
+
+    MENU_ASSISTANT_STATE.lastTurn = nextTurn;
+    renderMenuAssistantHistory();
+  }
+
+  function clearMenuAssistantConversation(statusMessage = "Smart Waiter chat cleared.") {
+    if (!menuAssistant) return;
+
+    setMenuAssistantActivePrompt("");
+    setMenuAssistantActiveFollowUp("");
+    MENU_ASSISTANT_STATE.lastFailureHint = "";
+    MENU_ASSISTANT_STATE.lastFailedPrompt = "";
+    MENU_ASSISTANT_STATE.lastTurn = null;
+    MENU_ASSISTANT_STATE.history = [];
+    clearMenuAssistantMobileNudgeTimer();
+    clearMenuAssistantReplyHighlight();
+    clearMenuAssistantReplyUpdatedTimer();
+    menuAssistant.input.value = "";
+    menuAssistant.summary.hidden = true;
+    menuAssistant.summary.textContent = "";
+    setMenuAssistantReplyUpdatedState("");
+    menuAssistant.answer.textContent = "";
+    menuAssistant.suggestions.innerHTML = "";
+    menuAssistant.followUps.innerHTML = "";
+    menuAssistant.actions.innerHTML = "";
+    menuAssistant.disclaimer.textContent = "";
+    menuAssistant.historyList.innerHTML = "";
+    menuAssistant.helper.hidden = true;
+    menuAssistant.helperTitle.textContent = "";
+    menuAssistant.helperCopy.textContent = "";
+    menuAssistant.helperLink.hidden = true;
+    menuAssistant.helperLink.href = "#";
+    menuAssistant.helperLink.textContent = "Open order tracking";
+    menuAssistant.reply.hidden = true;
+    setMenuAssistantStatusMessage(statusMessage);
+
+    renderMenuAssistantHistory();
+    renderMenuAssistantConversationControls();
+    syncMenuAssistantCharCount();
+    syncMenuAssistantSubmitHint();
+    syncMenuAssistantEmptyHint();
+    syncMenuAssistantFailureHint();
+    syncMenuAssistantRetry();
+  }
+
+  function getMenuAssistantReplySummary({
+    suggestions = [],
+    followUpPrompts = [],
+    actions = []
+  } = {}) {
+    if (Array.isArray(suggestions) && suggestions.length > 0) {
+      return `${suggestions.length} menu idea${suggestions.length === 1 ? "" : "s"} ready`;
+    }
+
+    if (Array.isArray(followUpPrompts) && followUpPrompts.length > 0) {
+      return `${followUpPrompts.length} follow-up option${followUpPrompts.length === 1 ? "" : "s"} ready`;
+    }
+
+    if (Array.isArray(actions) && actions.length > 0) {
+      return `${actions.length} safe action${actions.length === 1 ? "" : "s"} ready`;
+    }
+
+    return "Grounded menu reply ready";
+  }
+
+  function getMenuAssistantReplyUpdatedText() {
+    return "Updated just now";
+  }
+
+  function getMenuAssistantReplyOlderUpdatedText() {
+    return "Updated moments ago";
+  }
+
+  function clearMenuAssistantReplyUpdatedTimer() {
+    if (!menuAssistantReplyUpdatedTimer) return;
+
+    window.clearTimeout(menuAssistantReplyUpdatedTimer);
+    menuAssistantReplyUpdatedTimer = null;
+  }
+
+  function setMenuAssistantReplyUpdatedState(
+    text = "",
+    {
+      promoteAfterMs = 0,
+      promotedText = getMenuAssistantReplyOlderUpdatedText()
+    } = {}
+  ) {
+    if (!menuAssistant?.updated) return;
+
+    clearMenuAssistantReplyUpdatedTimer();
+    menuAssistant.updated.hidden = !text;
+    menuAssistant.updated.textContent = text;
+
+    if (!text || promoteAfterMs <= 0) {
+      return;
+    }
+
+    const sourceText = String(text || "");
+    menuAssistantReplyUpdatedTimer = window.setTimeout(() => {
+      menuAssistantReplyUpdatedTimer = null;
+
+      if (!menuAssistant || menuAssistant.reply.hidden) {
+        return;
+      }
+
+      if (String(menuAssistant.updated.textContent || "") !== sourceText) {
+        return;
+      }
+
+      menuAssistant.updated.textContent = promotedText;
+    }, promoteAfterMs);
+  }
+
+  function renderMenuAssistantReply(assistant = {}) {
+    if (!menuAssistant) return;
+    const suggestions = Array.isArray(assistant.suggestions) ? assistant.suggestions : [];
+    const followUpPrompts = Array.isArray(assistant.followUpPrompts)
+      ? assistant.followUpPrompts
+      : [];
+    const actions = Array.isArray(assistant.suggestedActions) ? assistant.suggestedActions : [];
+    const helper = getMenuAssistantOutOfScopeHelper(assistant);
+    const isOutOfScope = assistant?.meta?.mode === "out_of_scope";
+    const showNoSuggestionMatch = !isOutOfScope && suggestions.length === 0;
+    const summaryText = getMenuAssistantReplySummary({
+      suggestions,
+      followUpPrompts,
+      actions
+    });
+
+    menuAssistant.summary.hidden = !summaryText;
+    menuAssistant.summary.textContent = summaryText;
+    setMenuAssistantReplyUpdatedState(getMenuAssistantReplyUpdatedText(), {
+      promoteAfterMs: MENU_ASSISTANT_REPLY_UPDATED_PROMOTION_MS
+    });
+    menuAssistant.answer.textContent = assistant.answer || "I could not prepare a grounded reply just now.";
+    menuAssistant.suggestions.innerHTML = suggestions.length
+      ? `
+        <p class="menu-assistant-section-label">Menu ideas</p>
+        <div class="menu-assistant-section-body">
+          ${suggestions
+            .map(
+              (item) => `
+                <article class="menu-assistant-item">
+                  <strong>${escapeHTML(item.name || "Menu item")}</strong>
+                  <span>${escapeHTML(item.category || "Menu")} | ${escapeHTML(formatCurrency(item.price || 0))}</span>
+                  <span>${escapeHTML(item.reason || "Available on the current menu")}</span>
+                </article>
+              `
+            )
+            .join("")}
+        </div>
+      `
+      : showNoSuggestionMatch
+        ? `
+          <p class="menu-assistant-section-label">Menu ideas</p>
+          <p class="menu-assistant-empty-result">
+            No matching menu ideas found right now. Try another budget, spice level, dish type, or category.
+          </p>
+        `
+        : "";
+    menuAssistant.followUps.innerHTML = followUpPrompts.length
+      ? `
+        <p class="menu-assistant-section-label">Try next</p>
+        <div class="menu-assistant-section-body">
+          ${followUpPrompts
+            .map(
+              (prompt) => `
+                <button
+                  type="button"
+                  class="menu-assistant-chip"
+                  data-assistant-followup="${escapeAttr(prompt)}"
+                >
+                  ${escapeHTML(prompt)}
+                </button>
+              `
+            )
+            .join("")}
+        </div>
+      `
+      : "";
+    syncMenuAssistantActiveFollowUp();
+    menuAssistant.actions.innerHTML = actions.length
+      ? `
+        <p class="menu-assistant-section-label">Quick actions</p>
+        <div class="menu-assistant-section-body">
+          ${actions
+            .map(
+              (action) => `
+                <button
+                  type="button"
+                  class="menu-assistant-chip"
+                  data-assistant-action="${escapeAttr(action.type || "")}"
+                  data-assistant-item-id="${escapeAttr(action.itemId || "")}"
+                >
+                  ${escapeHTML(getMenuAssistantActionLabel(action))}
+                </button>
+              `
+            )
+            .join("")}
+        </div>
+      `
+      : "";
+    menuAssistant.disclaimer.textContent =
+      assistant.disclaimer ||
+      getMenuAssistantDefaultDisclaimer();
+    menuAssistant.helper.hidden = !helper;
+    menuAssistant.helperTitle.textContent = helper?.title || "";
+    menuAssistant.helperCopy.textContent = helper?.copy || "";
+    menuAssistant.helperLink.hidden = !helper?.linkUrl;
+    menuAssistant.helperLink.href = helper?.linkUrl || "#";
+    menuAssistant.helperLink.textContent = helper?.linkLabel || "Open order tracking";
+    menuAssistant.reply.hidden = false;
+    renderMenuAssistantConversationControls();
+    triggerMenuAssistantReplyHighlight();
+
+    const mobileNudgeTarget =
+      followUpPrompts.length >= 3 && menuAssistant.followUps?.childElementCount
+        ? menuAssistant.followUps
+        : menuAssistant.reply;
+
+    scheduleMenuAssistantMobileNudge(mobileNudgeTarget);
+  }
+
+  async function copyMenuAssistantAnswerToClipboard() {
+    if (!menuAssistant) return false;
+
+    const answerText = String(menuAssistant.answer?.textContent || "").trim();
+    if (!answerText) {
+      return false;
+    }
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(answerText);
+        return true;
+      } catch {
+        // Fall back to a temporary textarea below.
+      }
+    }
+
+    const fallbackTextarea = document.createElement("textarea");
+    fallbackTextarea.value = answerText;
+    fallbackTextarea.setAttribute("readonly", "true");
+    fallbackTextarea.style.position = "fixed";
+    fallbackTextarea.style.top = "-9999px";
+    fallbackTextarea.style.opacity = "0";
+    document.body.appendChild(fallbackTextarea);
+    fallbackTextarea.focus();
+    fallbackTextarea.select();
+
+    try {
+      return document.execCommand("copy");
+    } catch {
+      return false;
+    } finally {
+      fallbackTextarea.remove();
+    }
+  }
+
+  async function requestMenuAssistantReply(message = "") {
+    if (!menuAssistant) return;
+    const hotelSlug = getActiveHotelSlug();
+    const normalizedMessage = typeof message === "string" ? message.trim() : "";
+
+    if (!hotelSlug || !normalizedMessage) {
+      return;
+    }
+
+    setMenuAssistantOpen(true);
+    setMenuAssistantLoading(true, getMenuAssistantLoadingMessage());
+
+    try {
+      const result = await postJSON(
+        `/api/public/assistant/menu/${encodeURIComponent(hotelSlug)}`,
+        {
+          message: normalizedMessage,
+          context: getMenuAssistantContext(),
+        }
+      );
+
+      MENU_ASSISTANT_STATE.lastFailureHint = "";
+      MENU_ASSISTANT_STATE.lastFailedPrompt = "";
+      renderMenuAssistantReply(result?.assistant || {});
+      commitMenuAssistantTurn(normalizedMessage, result?.assistant || {});
+      setMenuAssistantStatusMessage("Grounded reply ready.", {
+        calmAfterMs: MENU_ASSISTANT_STATUS_CALM_DELAY_MS
+      });
+      syncMenuAssistantFailureHint();
+      syncMenuAssistantRetry();
+    } catch (error) {
+      console.error("Menu assistant request failed:", error);
+      MENU_ASSISTANT_STATE.lastFailureHint = getMenuAssistantFailureHintText();
+      MENU_ASSISTANT_STATE.lastFailedPrompt = normalizedMessage;
+      menuAssistant.reply.hidden = true;
+      renderMenuAssistantConversationControls();
+      setMenuAssistantStatusMessage(
+        error?.message || "The menu assistant is not available right now."
+      );
+      showToast("Smart Waiter is unavailable right now.");
+      syncMenuAssistantFailureHint();
+      syncMenuAssistantRetry();
+    } finally {
+      setMenuAssistantLoading(false, menuAssistant.status.textContent);
+    }
+  }
+
+  function getMenuAssistantActionStatusMessage(actionType = "", itemId = "") {
+    const orderContext = getActiveOrderContext();
+    const tableLabel = orderContext.tableNumber ? `Table ${orderContext.tableNumber}` : "";
+    const menuItem = itemId ? findMenuItemById(itemId) : null;
+    const itemName =
+      typeof menuItem?.name === "string" && menuItem.name.trim()
+        ? menuItem.name.trim()
+        : "That item";
+
+    if (actionType === "add_to_cart") {
+      if (hasActiveOrderAddonContext(orderContext) && tableLabel) {
+        return `${itemName} was added for ${tableLabel}.`;
+      }
+
+      if (hasDineInOrderContext(orderContext) && tableLabel) {
+        return `${itemName} was added to ${tableLabel}'s cart.`;
+      }
+
+      return `${itemName} was added to your cart.`;
+    }
+
+    if (actionType === "open_cart") {
+      if (hasDineInOrderContext(orderContext) && tableLabel) {
+        return `Opened ${tableLabel}'s cart.`;
+      }
+
+      return "Opened your cart.";
+    }
+
+    if (actionType === "view_full_menu") {
+      if (hasActiveOrderAddonContext(orderContext) && tableLabel) {
+        return `Showing the full add-on menu for ${tableLabel}.`;
+      }
+
+      if (hasDineInOrderContext(orderContext) && tableLabel) {
+        return `Showing the full menu for ${tableLabel}.`;
+      }
+
+      return "Showing the full menu below.";
+    }
+
+    return "";
+  }
+
+  function setMenuAssistantActionStatus(actionType = "", itemId = "") {
+    if (!menuAssistant) {
+      return;
+    }
+
+    setMenuAssistantStatusMessage(
+      getMenuAssistantActionStatusMessage(actionType, itemId),
+      {
+        calmAfterMs: MENU_ASSISTANT_STATUS_CALM_DELAY_MS
+      }
+    );
+  }
+
+  function getMenuAssistantActionRegistry() {
+    return {
+      add_to_cart: {
+        safetyLevel: "local_ui",
+        run(targetItemId = "") {
+          if (!findMenuItemById(targetItemId)) {
+            if (menuAssistant) {
+              setMenuAssistantStatusMessage("That menu item is not available right now.");
+            }
+            showToast("That menu item is not available right now.");
+            return;
+          }
+
+          queueMenuGridFocusRestore(targetItemId, ["plus", "remove", "add"]);
+          addToCartWithLocation(targetItemId);
+          setMenuAssistantActionStatus("add_to_cart", targetItemId);
+        }
+      },
+      open_cart: {
+        safetyLevel: "local_ui",
+        run(targetItemId = "") {
+          openCartDrawer();
+          setMenuAssistantActionStatus("open_cart", targetItemId);
+        }
+      },
+      view_full_menu: {
+        safetyLevel: "navigation",
+        run(targetItemId = "") {
+          if (shouldUsePreviewMode()) {
+            window.location.href = withHotelSlug("menu.html");
+            return;
+          }
+
+          grid.scrollIntoView({ behavior: "smooth", block: "start" });
+          setMenuAssistantActionStatus("view_full_menu", targetItemId);
+          showToast("Browse the full menu below.");
+        }
+      }
+    };
+  }
+
+  function handleMenuAssistantAction(actionType = "", itemId = "") {
+    const normalizedActionType = String(actionType || "").trim();
+    const actionDefinition = getMenuAssistantActionRegistry()[normalizedActionType];
+
+    if (!actionDefinition || typeof actionDefinition.run !== "function") {
+      console.warn("Blocked unsupported Smart Waiter action:", normalizedActionType);
+      return;
+    }
+
+    actionDefinition.run(itemId);
+  }
+
+  if (menuAssistant) {
+    renderMenuAssistantPrompts();
+    renderMenuAssistantHistory();
+    renderMenuAssistantConversationControls();
+    restoreMenuAssistantOpenPreference();
+    syncMenuAssistantCharCount();
+    syncMenuAssistantSubmitHint();
+    syncMenuAssistantFailureHint();
+    syncMenuAssistantRetry();
+
+    if (!menuAssistant.card.dataset.assistantBound) {
+      menuAssistant.card.dataset.assistantBound = "1";
+
+      menuAssistant.toggleBtn.addEventListener("click", () => {
+        const stableOpen = syncMenuAssistantOpenStateFromDom();
+        setMenuAssistantOpen(!stableOpen);
+      });
+
+      menuAssistant.exampleBtn?.addEventListener("click", () => {
+        if (MENU_ASSISTANT_STATE.loading) return;
+
+        const examplePrompt = menuAssistant.exampleBtn?.dataset.assistantExample || "";
+        if (!examplePrompt) return;
+
+        setMenuAssistantActivePrompt("");
+        setMenuAssistantActiveFollowUp("");
+        setMenuAssistantOpen(true);
+        menuAssistant.input.value = examplePrompt;
+        menuAssistant.input.focus({ preventScroll: true });
+        menuAssistant.input.setSelectionRange(examplePrompt.length, examplePrompt.length);
+        clearMenuAssistantFailureHint();
+        syncMenuAssistantCharCount();
+        syncMenuAssistantSubmitHint();
+        setMenuAssistantStatusMessage("You can edit this example or ask it as-is.");
+        syncMenuAssistantEmptyHint();
+      });
+
+      menuAssistant.clearBtn?.addEventListener("click", () => {
+        if (MENU_ASSISTANT_STATE.loading) return;
+
+        clearMenuAssistantConversation("Smart Waiter chat cleared. Ask a new menu question anytime.");
+        menuAssistant.input.focus({ preventScroll: true });
+      });
+
+      menuAssistant.askAgainBtn?.addEventListener("click", () => {
+        if (MENU_ASSISTANT_STATE.loading || menuAssistant.askAgainBtn.hidden) return;
+
+        const repeatPrompt = String(MENU_ASSISTANT_STATE.lastTurn?.question || "").trim();
+        if (!repeatPrompt) return;
+
+        setMenuAssistantActivePrompt("");
+        setMenuAssistantActiveFollowUp("");
+        setMenuAssistantOpen(true);
+        menuAssistant.input.value = repeatPrompt;
+        clearMenuAssistantFailureHint();
+        syncMenuAssistantCharCount();
+        syncMenuAssistantSubmitHint();
+        syncMenuAssistantEmptyHint();
+        void requestMenuAssistantReply(repeatPrompt);
+      });
+
+      menuAssistant.copyBtn?.addEventListener("click", async () => {
+        if (MENU_ASSISTANT_STATE.loading || menuAssistant.copyBtn.hidden) return;
+
+        const copied = await copyMenuAssistantAnswerToClipboard();
+        setMenuAssistantStatusMessage(
+          copied
+            ? "Smart Waiter answer copied."
+            : "Could not copy the Smart Waiter answer right now.",
+          copied
+            ? { calmAfterMs: MENU_ASSISTANT_STATUS_CALM_DELAY_MS }
+            : {}
+        );
+
+        if (copied) {
+          showToast("Smart Waiter answer copied.");
+        }
+      });
+
+      menuAssistant.retryBtn?.addEventListener("click", () => {
+        if (MENU_ASSISTANT_STATE.loading) return;
+
+        const retryPrompt = String(MENU_ASSISTANT_STATE.lastFailedPrompt || "").trim();
+        if (!retryPrompt) return;
+
+        setMenuAssistantActivePrompt("");
+        setMenuAssistantActiveFollowUp("");
+        setMenuAssistantOpen(true);
+        menuAssistant.input.value = retryPrompt;
+        syncMenuAssistantCharCount();
+        syncMenuAssistantSubmitHint();
+        syncMenuAssistantEmptyHint();
+        void requestMenuAssistantReply(retryPrompt);
+      });
+
+      menuAssistant.promptsWrap.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-assistant-prompt]");
+        if (!button || MENU_ASSISTANT_STATE.loading) return;
+
+        const prompt = button.dataset.assistantPrompt || "";
+        setMenuAssistantActivePrompt(prompt);
+        setMenuAssistantActiveFollowUp("");
+        menuAssistant.input.value = prompt;
+        clearMenuAssistantFailureHint();
+        syncMenuAssistantCharCount();
+        syncMenuAssistantSubmitHint();
+        syncMenuAssistantEmptyHint();
+        void requestMenuAssistantReply(prompt);
+      });
+
+      menuAssistant.input.addEventListener("input", () => {
+        setMenuAssistantActivePrompt("");
+        setMenuAssistantActiveFollowUp("");
+        clearMenuAssistantFailureHint();
+        syncMenuAssistantCharCount();
+        syncMenuAssistantSubmitHint();
+        syncMenuAssistantEmptyHint();
+      });
+
+      menuAssistant.body.addEventListener("keydown", (event) => {
+        handleMenuAssistantEscape(event);
+      });
+
+      menuAssistant.form.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        if (MENU_ASSISTANT_STATE.loading) {
+          return;
+        }
+
+        const message = menuAssistant.input.value.trim();
+
+        if (!message) {
+          showToast("Please enter a menu question first.");
+          menuAssistant.input.focus({ preventScroll: true });
+          return;
+        }
+
+        void requestMenuAssistantReply(message);
+      });
+
+      menuAssistant.actions.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-assistant-action]");
+        if (!button) return;
+
+        handleMenuAssistantAction(
+          button.dataset.assistantAction || "",
+          button.dataset.assistantItemId || ""
+        );
+      });
+
+      menuAssistant.followUps.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-assistant-followup]");
+        if (!button || MENU_ASSISTANT_STATE.loading) return;
+
+        const prompt = button.dataset.assistantFollowup || "";
+        setMenuAssistantActivePrompt("");
+        setMenuAssistantActiveFollowUp(prompt);
+        menuAssistant.input.value = prompt;
+        clearMenuAssistantFailureHint();
+        syncMenuAssistantCharCount();
+        syncMenuAssistantSubmitHint();
+        syncMenuAssistantEmptyHint();
+        void requestMenuAssistantReply(prompt);
+      });
     }
   }
 
@@ -3026,7 +5298,7 @@ function initMenuAndCart() {
         <input type="radio" name="paymentMethod" value="ONLINE_GATEWAY" />
         <span class="payment-gateway-copy">
           <strong>Secure Online Payment</strong>
-          <small>Test gateway bridge. Manual UPI stays available as fallback.</small>
+          <small>Verified checkout opens in the next step.</small>
         </span>
       `;
       upiLabel.insertAdjacentElement("afterend", gatewayOption);
@@ -3039,9 +5311,9 @@ function initMenuAndCart() {
       gatewayBox.className = "payment-gateway-box";
       gatewayBox.hidden = true;
       gatewayBox.innerHTML = `
-        <p class="payment-gateway-status">Secure online payment is staged in test mode.</p>
+        <p class="payment-gateway-status">Secure online payment is available for this hotel.</p>
         <p class="payment-gateway-note">
-          We will open the verified gateway checkout in the next step. Until then, COD and manual Google Pay / UPI remain the live options.
+          We will open the verified gateway checkout next. After payment confirmation, the order is saved before the hotel handoff continues.
         </p>
       `;
       gatewayOption.insertAdjacentElement("afterend", gatewayBox);
@@ -3176,6 +5448,24 @@ function initMenuAndCart() {
     }
   }
 
+  function isPaidGatewayOrderResult(result = {}) {
+    if (!result || typeof result !== "object") {
+      return false;
+    }
+
+    if (result.orderUpdated) {
+      return true;
+    }
+
+    const updateReason = String(result.orderUpdateReason || "").trim().toLowerCase();
+    const payment = result.payment && typeof result.payment === "object" ? result.payment : {};
+
+    return (
+      updateReason === "already_paid_by_other_request" &&
+      (payment.verified === true || payment.captured === true)
+    );
+  }
+
   function loadPaymentGatewayScript() {
     if (window.Razorpay) {
       return Promise.resolve(window.Razorpay);
@@ -3295,7 +5585,7 @@ function initMenuAndCart() {
               gatewayOrderId
             });
 
-            if (reconcileResult?.orderUpdated) {
+            if (isPaidGatewayOrderResult(reconcileResult)) {
               resolveWithPaidGatewayResult(reconcileResult, {
                 razorpay_order_id: gatewayOrderId,
                 razorpay_payment_id: reconcileResult.payment?.gatewayPaymentId || ""
@@ -3328,7 +5618,7 @@ function initMenuAndCart() {
               gatewayOrderId
             });
 
-            if (reconcileResult?.orderUpdated) {
+            if (isPaidGatewayOrderResult(reconcileResult)) {
               resolveWithPaidGatewayResult(reconcileResult, {
                 razorpay_order_id: gatewayOrderId,
                 razorpay_payment_id: reconcileResult.payment?.gatewayPaymentId || ""
@@ -3369,6 +5659,8 @@ function initMenuAndCart() {
     customerName,
     customerPhone,
     customerAddress,
+    customerTableNote,
+    locationLink,
     note,
     summaryText,
     orderContext
@@ -3407,7 +5699,7 @@ function initMenuAndCart() {
       orderContext
     });
 
-    if (!checkoutResult?.verifyResult?.orderUpdated) {
+    if (!isPaidGatewayOrderResult(checkoutResult?.verifyResult)) {
       throw new Error(
         "Payment was verified, but the order could not be marked paid. Please contact the hotel."
       );
@@ -3426,16 +5718,57 @@ function initMenuAndCart() {
     const codInput = document.querySelector('input[name="paymentMethod"][value="COD"]');
     if (codInput) codInput.checked = true;
 
+    let verifiedHotelHandoffReady = false;
+    let verifiedHotelHandoffUnavailable = false;
+
+    if (OPEN_WHATSAPP_AFTER_VERIFIED_ONLINE_PAYMENT) {
+      const verifiedSummaryText = buildOrderSummaryText({
+        customerName,
+        customerPhone,
+        customerAddress,
+        customerTableNote,
+        locationLink,
+        paymentMethod,
+        note,
+        paymentConfirmed: true,
+        items: normalizedCart,
+        orderContext
+      });
+      const verifiedHotelWhatsAppLink = cleanPhone(CONFIG.OWNER_WHATSAPP_NUMBER)
+        ? ownerWhatsAppLink(verifiedSummaryText)
+        : "";
+
+      if (verifiedHotelWhatsAppLink) {
+        openWhatsAppSafely(verifiedHotelWhatsAppLink);
+        verifiedHotelHandoffReady = true;
+      } else {
+        verifiedHotelHandoffUnavailable = true;
+        console.warn(
+          "Verified payment succeeded, but owner WhatsApp handoff is unavailable for this hotel."
+        );
+      }
+    }
+
     closeCartDrawer();
     updatePaymentUI();
     showOrderTrackingPrompt(
       initResult?.tracking,
-      "Payment verified. Your live order tracking link is ready."
+      verifiedHotelHandoffReady
+        ? "Payment verified. Your hotel handoff opened in WhatsApp and your live order tracking link is ready."
+        : "Payment verified. Your live order tracking link is ready."
     );
     showToast(
-      initResult?.trackingReady
-        ? "Payment verified. Tracking link is ready."
-        : "Payment verified. Your order was saved successfully."
+      verifiedHotelHandoffReady
+        ? initResult?.trackingReady
+          ? "Payment verified. WhatsApp handoff and tracking link are ready."
+          : "Payment verified. WhatsApp handoff is ready."
+        : verifiedHotelHandoffUnavailable
+          ? initResult?.trackingReady
+            ? "Payment verified. Tracking link is ready, but hotel WhatsApp handoff is not configured."
+            : "Payment verified. Order saved, but hotel WhatsApp handoff is not configured."
+          : initResult?.trackingReady
+            ? "Payment verified. Tracking link is ready."
+            : "Payment verified. Your order was saved successfully."
     );
   }
 
@@ -4188,6 +6521,8 @@ async function handleCheckoutSubmit(e) {
         customerName,
         customerPhone,
         customerAddress,
+        customerTableNote: rawCustomerAddress,
+        locationLink,
         note,
         summaryText,
         orderContext
@@ -4246,6 +6581,7 @@ async function handleCheckoutSubmit(e) {
 
   let waLink;
   let tracking = null;
+  let usedDirectWhatsAppFallback = false;
 
   try {
     const result = await postJSON(endpoint, payload);
@@ -4257,11 +6593,22 @@ async function handleCheckoutSubmit(e) {
     waLink = result.ownerWhatsappLink || activeHotelWhatsappLink || ownerWhatsAppLink(approvedSummaryText);
     tracking = result?.trackingReady ? result.tracking : null;
   } catch (error) {
-    console.warn("Backend save failed, using direct WhatsApp fallback", error);
     if (error?.status >= 400 && error.status < 500) {
       showToast(error.message || "Order details are invalid. Please refresh and try again.");
       return;
     }
+    if (!ALLOW_ORDER_WHATSAPP_FALLBACK_ON_SAVE_FAILURE) {
+      console.warn(
+        "Backend save failed and direct WhatsApp fallback is disabled by runtime policy",
+        error
+      );
+      showToast(
+        "Backend save failed, so this order was not sent to WhatsApp. Please wait a moment and try again."
+      );
+      return;
+    }
+    console.warn("Backend save failed, using direct WhatsApp fallback", error);
+    usedDirectWhatsAppFallback = true;
     waLink = ownerWhatsAppLink(summaryText);
   }
 
@@ -4285,7 +6632,9 @@ async function handleCheckoutSubmit(e) {
 
   showOrderTrackingPrompt(tracking);
   showToast(
-    tracking
+    usedDirectWhatsAppFallback
+      ? "Backend save failed. Order opened in WhatsApp only, so tracking is not available for this order."
+      : tracking
       ? "Order saved. Tracking link is ready."
       : "Order sent to WhatsApp successfully!"
   );
@@ -4532,19 +6881,47 @@ const GalleryLightbox = (() => {
 /* ════════════════════════════════════════════════════════
    9. GOOGLE SHEET HELPER
    ════════════════════════════════════════════════════════ */
-const SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycby-lmCsB31TzVVKzxmBJdQk9cgVBDHcGlnr2730VZq6R_b7d9Odmd3BG6IFAJz9Li9RMA/exec";
+function getConfiguredContactSheetUrl() {
+  return getRuntimeTextConfig("CONTACT_SHEET_URL", "");
+}
 
 async function sendToSheet(data) {
+  const contactSheetUrl = getConfiguredContactSheetUrl();
+
+  if (!contactSheetUrl) {
+    return {
+      ok: false,
+      status: "disabled",
+      response: null
+    };
+  }
+
   try {
-    const res = await fetch(SCRIPT_URL, {
+    const res = await fetch(contactSheetUrl, {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify(data)
     });
-    return await res.json();
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: "failed",
+        response: null
+      };
+    }
+
+    return {
+      ok: true,
+      status: "saved",
+      response: await res.json().catch(() => ({}))
+    };
   } catch (err) {
-    console.error(err);
-    return null;
+    console.warn("Optional contact Google Sheet mirror failed:", err);
+    return {
+      ok: false,
+      status: "failed",
+      response: null
+    };
   }
 }
 
@@ -4572,9 +6949,20 @@ async function sendToSheet(data) {
       message: $("#ctMessage", form)?.value.trim(),
     };
 
-    const sheetResult = await sendToSheet(data);
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    if (submitButton) {
+      submitButton.disabled = true;
+    }
+
     const hotelName = getActiveHotelName();
     const hotelSlug = getActiveHotelSlug();
+    let dbSaveSucceeded = false;
+    let sheetResult = {
+      ok: false,
+      status: "disabled",
+      response: null
+    };
 
     if (hotelName && hotelSlug) {
       try {
@@ -4584,18 +6972,29 @@ async function sendToSheet(data) {
           name: data.name,
           email: data.email,
           subject: data.subject,
-          message: data.message,
-          googleSheetStatus: sheetResult ? "saved" : "failed",
-          googleSheetResponse:
-            sheetResult && typeof sheetResult === "object" && !Array.isArray(sheetResult)
-              ? sheetResult
-              : {}
+          message: data.message
         });
+        dbSaveSucceeded = true;
       } catch (error) {
-        console.warn("Contact DB save failed; Google Sheet flow preserved:", error);
+        console.warn("Primary contact DB save failed:", error);
       }
     } else {
       console.warn("Contact DB save skipped: hotel context unavailable.");
+    }
+
+    sheetResult = await sendToSheet(data);
+    const sheetSaveSucceeded = !!sheetResult.ok;
+
+    if (!sheetSaveSucceeded && !dbSaveSucceeded) {
+      if (submitButton) {
+        submitButton.disabled = false;
+      }
+      showToast("Failed to send contact message. Please try again.");
+      return;
+    }
+
+    if (dbSaveSucceeded && sheetResult.status === "failed") {
+      console.warn("Contact saved in DB, but optional Google Sheet mirror failed.");
     }
 
     form.style.display = "none";
@@ -4605,6 +7004,9 @@ async function sendToSheet(data) {
       success.hidden = true;
       form.style.display = "block";
       form.reset();
+      if (submitButton) {
+        submitButton.disabled = false;
+      }
     }, 5000);
   });
 })();
