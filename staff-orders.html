@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="app-backend-base-url" content="https://production-backend-fc-01-1.onrender.com" />
-<meta name="app-api-base-url" content="https://production-backend-fc-01-1.onrender.com/api" />
+  <meta name="app-backend-base-url" content="https://restaurantsmanagement-26-backend.onrender.com" />
+  <meta name="app-api-base-url" content="https://restaurantsmanagement-26-backend.onrender.com" />
 <meta name="app-allow-order-whatsapp-fallback-on-save-failure" content="false" />
 <meta name="app-open-whatsapp-after-verified-online-payment" content="true" />
 <meta name="app-contact-sheet-url" content="" />
@@ -189,7 +189,8 @@ letter-spacing: 0.02em;
 }
 
 .staff-input,
-.staff-select {
+.staff-select,
+.staff-textarea {
 width: 100%;
 min-height: 48px;
 border: 1px solid rgba(131, 91, 55, 0.20);
@@ -209,19 +210,22 @@ background 180ms ease;
 }
 
 .staff-input::placeholder,
-.staff-select::placeholder {
+.staff-select::placeholder,
+.staff-textarea::placeholder {
 color: var(--staff-muted-soft);
 }
 
 .staff-input:hover,
-.staff-select:hover {
+.staff-select:hover,
+.staff-textarea:hover {
 border-color: rgba(159, 110, 49, 0.34);
 background:
 linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 244, 237, 0.98));
 }
 
 .staff-input:focus,
-.staff-select:focus {
+.staff-select:focus,
+.staff-textarea:focus {
 outline: none;
 border-color: var(--staff-gold);
 box-shadow:
@@ -241,6 +245,13 @@ background-repeat: no-repeat, no-repeat;
 background-position: 0 0, calc(100% - 14px) 50%;
 background-size: auto, 18px;
 padding-right: 42px;
+}
+
+.staff-textarea {
+min-height: 96px;
+resize: vertical;
+font: inherit;
+line-height: 1.5;
 }
 
 .staff-hint,
@@ -1150,6 +1161,142 @@ display: grid;
 gap: 14px;
 }
 
+.staff-table-order-layout {
+display: grid;
+grid-template-columns: minmax(260px, 0.34fr) minmax(0, 0.66fr);
+gap: 16px;
+align-items: start;
+}
+
+.staff-table-order-form,
+.staff-table-order-menu {
+display: grid;
+gap: 14px;
+}
+
+.staff-table-order-menu-head {
+display: flex;
+justify-content: space-between;
+gap: 12px;
+align-items: center;
+}
+
+.staff-table-order-menu-tools {
+display: grid;
+grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+gap: 12px;
+align-items: end;
+}
+
+.staff-table-order-filter-summary {
+margin: 0;
+color: var(--staff-muted);
+font-size: 13px;
+line-height: 1.5;
+}
+
+.staff-table-order-menu-grid {
+display: grid;
+grid-template-columns: repeat(2, minmax(0, 1fr));
+gap: 12px;
+}
+
+.staff-table-order-item {
+display: grid;
+gap: 12px;
+padding: 16px;
+border: 1px solid rgba(133, 86, 49, 0.12);
+border-radius: 18px;
+background:
+linear-gradient(180deg, rgba(255, 255, 255, 0.70), rgba(248, 239, 229, 0.84));
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.82),
+0 12px 24px rgba(115, 77, 46, 0.07);
+}
+
+.staff-table-order-item-head {
+display: flex;
+justify-content: space-between;
+gap: 12px;
+align-items: flex-start;
+}
+
+.staff-table-order-item-title,
+.staff-table-order-cart-title {
+margin: 0;
+color: var(--staff-text-strong);
+font-size: 15px;
+font-weight: 900;
+line-height: 1.32;
+}
+
+.staff-table-order-item-meta,
+.staff-table-order-status {
+margin: 0;
+color: var(--staff-muted);
+font-size: 13px;
+line-height: 1.5;
+}
+
+.staff-table-order-item-price {
+white-space: nowrap;
+color: var(--staff-terracotta-deep);
+font-weight: 900;
+}
+
+.staff-table-order-qty {
+display: grid;
+grid-template-columns: 42px minmax(44px, 1fr) 42px;
+gap: 8px;
+align-items: center;
+max-width: 160px;
+}
+
+.staff-table-order-qty-value {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+min-height: 40px;
+border: 1px solid rgba(133, 86, 49, 0.12);
+border-radius: 14px;
+background: rgba(255, 250, 244, 0.78);
+color: var(--staff-text-strong);
+font-weight: 900;
+}
+
+.staff-table-order-cart-list {
+display: grid;
+gap: 10px;
+margin: 0;
+padding: 0;
+list-style: none;
+}
+
+.staff-table-order-cart-row {
+display: flex;
+justify-content: space-between;
+gap: 12px;
+padding: 10px 0;
+border-bottom: 1px solid rgba(133, 86, 49, 0.10);
+color: var(--staff-text-strong);
+font-size: 13px;
+}
+
+.staff-table-order-cart-row:last-child {
+border-bottom: 0;
+}
+
+.staff-table-order-cart-total {
+display: flex;
+justify-content: space-between;
+gap: 12px;
+margin-top: 4px;
+padding-top: 12px;
+border-top: 1px solid rgba(133, 86, 49, 0.14);
+color: var(--staff-text-strong);
+font-weight: 900;
+}
+
 .staff-summary-grid {
 display: grid;
 grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1616,6 +1763,13 @@ radial-gradient(circle at top right, rgba(139, 67, 88, 0.10), transparent 13rem)
 linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(243, 237, 230, 0.84));
 }
 
+.staff-order-group.is-staff-table {
+border-color: rgba(129, 92, 154, 0.18);
+background:
+radial-gradient(circle at top right, rgba(129, 92, 154, 0.12), transparent 13rem),
+linear-gradient(180deg, rgba(255, 252, 247, 0.78), rgba(240, 234, 244, 0.84));
+}
+
 .staff-order-group-header {
 display: flex;
 flex-wrap: wrap;
@@ -1667,6 +1821,12 @@ inset 0 1px 0 rgba(255, 255, 255, 0.22);
 border-color: rgba(118, 91, 69, 0.16);
 background:
 linear-gradient(135deg, #7b634d 0%, #9d7a5b 54%, #8a4a58 100%);
+}
+
+.staff-order-group.is-staff-table .staff-order-group-count {
+border-color: rgba(129, 92, 154, 0.18);
+background:
+linear-gradient(135deg, #7c6092 0%, #9c725f 54%, #8a4a58 100%);
 }
 
 .staff-order-group-list {
@@ -2066,6 +2226,12 @@ justify-content: flex-start;
 grid-template-columns: 1fr;
 }
 
+.staff-table-order-layout,
+.staff-table-order-menu-tools,
+.staff-table-order-menu-grid {
+grid-template-columns: 1fr;
+}
+
 .staff-dashboard-shortcuts {
 grid-template-columns: 1fr;
 }
@@ -2163,10 +2329,10 @@ padding-left: 18px;
   <main class="staff-wrap">
     <header class="staff-header">
       <div>
-        <p class="staff-kicker">Limited Hotel Access</p>
-        <h1 class="staff-title">Staff Dashboard</h1>
+        <p class="staff-kicker">Hotel Access</p>
+        <h1 class="staff-title">Welcome</h1>
         <p class="staff-sub">
-          A separate hotel workspace for orders, support, reservations, inquiries, contacts, and testimonials. This page stays intentionally separate from the full admin dashboard.
+       <b>Serving Success Beyond the Kitchen.</b>   
         </p>
       </div>
     </header>
@@ -2199,11 +2365,10 @@ padding-left: 18px;
       </div>
 
       <aside class="staff-card">
-        <p class="staff-kicker">Scope</p>
-        <h2 class="staff-panel-title">One hotel only</h2>
+        <p class="staff-kicker">Restaurant Operating System</p>
+        <h2 class="staff-panel-title">Built for Growth</h2>
         <p class="staff-empty">
-          Staff users will only see orders for the hotel attached to their staff token. They will not get access to the full admin dashboard.
-        </p>
+Streamline operations, delight customers, and grow your business with confidence.   </p>
       </aside>
     </section>
 
@@ -2216,13 +2381,15 @@ padding-left: 18px;
                 <p class="staff-kicker">Hotel Dashboard</p>
                 <h2 class="staff-sidebar-title">Staff workspace</h2>
               </div>
-              <span class="staff-sidebar-section-count" aria-label="Available sections">7</span>
+              <span class="staff-sidebar-section-count" aria-label="Available sections">8</span>
             </div>
-            <p class="staff-sidebar-copy">Move between live hotel sections from one structured workspace while keeping the same limited hotel-scoped access model.</p>
+            <p class="staff-sidebar-copy">
+              Move between live hotel sections from one structured workspace while keeping the same limited hotel-scoped access model.</p>
           </div>
 
           <div class="staff-view-tabs" role="tablist" aria-label="Staff dashboard sections">
             <button class="staff-view-tab is-active" type="button" data-staff-view="dashboard" aria-selected="true">Dashboard</button>
+            <button class="staff-view-tab" type="button" data-staff-view="table-order" aria-selected="false">Take Order</button>
             <button class="staff-view-tab" type="button" data-staff-view="orders" aria-selected="false">Orders <span id="staffOrdersTabCount" class="staff-view-tab-count">0</span></button>
             <button class="staff-view-tab" type="button" data-staff-view="support" aria-selected="false">Support <span id="staffSupportTabCount" class="staff-view-tab-count">0</span></button>
             <button class="staff-view-tab" type="button" data-staff-view="reservations" aria-selected="false">Reservations <span id="staffReservationsTabCount" class="staff-view-tab-count">0</span></button>
@@ -2233,7 +2400,8 @@ padding-left: 18px;
 
           <div class="staff-sidebar-note">
             <span class="staff-section-pill">Hotel scoped access</span>
-            <p class="staff-hint">Orders, reservations, inquiries, contacts, support requests, and testimonial moderation stay limited to the logged-in hotel only.</p>
+            <p class="staff-hint">
+              Orders, reservations, inquiries, contacts, support requests, and testimonial moderation stay limited to the logged-in hotel only.</p>
           </div>
         </aside>
 
@@ -2258,8 +2426,8 @@ padding-left: 18px;
           <div class="staff-dashboard-hero">
         <div>
           <p class="staff-kicker">Owner Workspace</p>
-          <h2 class="staff-dashboard-title">Operations for <span id="staffSessionHotel">this hotel</span></h2>
-          <p class="staff-hint staff-dashboard-copy">A limited, hotel-scoped view for orders, billing, table support, reservations, inquiries, contact messages, and guest reviews. Open the section you need without leaving the workspace.</p>
+          <h2 class="staff-dashboard-title"><span id="staffSessionHotel">this hotel</span></h2>
+          <p class="staff-hint staff-dashboard-copy">Hotel-scoped view for orders, billing, table support, reservations, inquiries, contact messages, and guest reviews. Open the section you need without leaving the workspace.</p>
         </div>
 
         <div class="staff-dashboard-top-actions">
@@ -2290,6 +2458,13 @@ padding-left: 18px;
         <div id="staffDashboardSupportSummary" class="staff-summary-grid" hidden></div>
 
         <div class="staff-dashboard-shortcuts" aria-label="Dashboard shortcuts">
+          <button class="staff-dashboard-shortcut" type="button" data-staff-view="table-order">
+            <span class="staff-dashboard-shortcut-label">Service</span>
+            <h4 class="staff-dashboard-shortcut-title">Take Table Order</h4>
+            <p class="staff-dashboard-shortcut-copy">Create a dine-in table order from the live menu for this hotel.</p>
+            <span class="staff-dashboard-shortcut-action">Open order pad</span>
+          </button>
+
           <button class="staff-dashboard-shortcut" type="button" data-staff-view="orders">
             <span class="staff-dashboard-shortcut-label">Billing</span>
             <h4 class="staff-dashboard-shortcut-title">Open Orders</h4>
@@ -2334,6 +2509,84 @@ padding-left: 18px;
         </div>
       </section>
 
+      <section id="staffTableOrderPanel" class="staff-view-panel" data-staff-view-panel="table-order" aria-label="Staff table order" hidden>
+        <div class="staff-section-head">
+          <div>
+            <p class="staff-kicker">Table Order</p>
+            <h3>Take table order</h3>
+            <p class="staff-section-copy">Create a staff-assisted dine-in order for the logged-in hotel.</p>
+          </div>
+          <div class="staff-section-meta">
+            <span class="staff-section-pill">Staff source</span>
+            <p id="staffTableOrderLastUpdated" class="staff-section-refresh-time">Menu not loaded yet</p>
+          </div>
+        </div>
+
+        <div class="staff-section-stage staff-table-order-layout">
+          <form id="staffTableOrderForm" class="staff-table-order-form" autocomplete="off">
+            <div class="staff-field">
+              <label class="staff-label" for="staffTableOrderTableInput">Table Number</label>
+              <input id="staffTableOrderTableInput" class="staff-input" name="tableNumber" maxlength="80" placeholder="T5" required />
+            </div>
+
+            <div class="staff-field">
+              <label class="staff-label" for="staffTableOrderCustomerNameInput">Guest Name</label>
+              <input id="staffTableOrderCustomerNameInput" class="staff-input" name="customerName" maxlength="100" placeholder="Table Guest" />
+            </div>
+
+            <div class="staff-field">
+              <label class="staff-label" for="staffTableOrderCustomerPhoneInput">Phone</label>
+              <input id="staffTableOrderCustomerPhoneInput" class="staff-input" name="customerPhone" maxlength="20" inputmode="tel" placeholder="Optional" />
+            </div>
+
+            <div class="staff-field">
+              <label class="staff-label" for="staffTableOrderNoteInput">Notes</label>
+              <textarea id="staffTableOrderNoteInput" class="staff-textarea" name="note" maxlength="1000" placeholder="Kitchen instructions"></textarea>
+            </div>
+
+            <section class="staff-summary-card" aria-label="Selected table order items">
+              <p class="staff-summary-label">Order Cart</p>
+              <div id="staffTableOrderCartSummary">
+                <p class="staff-empty">No items selected.</p>
+              </div>
+            </section>
+
+            <p id="staffTableOrderStatus" class="staff-table-order-status" aria-live="polite" hidden></p>
+
+            <div class="staff-actions">
+              <button id="staffTableOrderSubmitBtn" class="staff-btn" type="submit" disabled>Place Order</button>
+              <button id="staffTableOrderClearBtn" class="staff-btn secondary" type="button">Clear</button>
+            </div>
+          </form>
+
+          <section class="staff-table-order-menu" aria-label="Staff menu">
+            <div class="staff-table-order-menu-head">
+              <div>
+                <p class="staff-kicker">Live Menu</p>
+                <h3 class="staff-panel-title">Menu items</h3>
+              </div>
+              <button id="staffRefreshTableOrderMenuBtn" class="staff-btn secondary" type="button">Refresh Menu</button>
+            </div>
+            <div class="staff-table-order-menu-tools" aria-label="Menu filters">
+              <div class="staff-field">
+                <label class="staff-label" for="staffTableOrderSearchInput">Search Menu</label>
+                <input id="staffTableOrderSearchInput" class="staff-input" type="search" placeholder="Search dishes, tags, or category" autocomplete="off" />
+              </div>
+              <div class="staff-field">
+                <label class="staff-label" for="staffTableOrderCategoryFilter">Category</label>
+                <select id="staffTableOrderCategoryFilter" class="staff-input">
+                  <option value="all">All categories</option>
+                </select>
+              </div>
+            </div>
+            <p id="staffTableOrderFilterSummary" class="staff-table-order-filter-summary">All available menu items for this hotel.</p>
+            <div id="staffTableOrderMenuContent" class="staff-empty">
+              Open this view to load the menu.
+            </div>
+          </section>
+        </div>
+      </section>
+
       <section id="staffOrdersPanel" class="staff-view-panel" data-staff-view-panel="orders" aria-label="Staff orders" hidden>
         <div class="staff-section-head">
           <div>
@@ -2359,6 +2612,7 @@ padding-left: 18px;
           <select id="staffOrdersSourceInput" class="staff-select" aria-label="Order source">
             <option value="all" selected>All sources</option>
             <option value="qr-table">QR table orders</option>
+            <option value="staff-table">Staff table orders</option>
             <option value="website">Website orders</option>
           </select>
           <select id="staffOrdersTableInput" class="staff-select" aria-label="Table number">

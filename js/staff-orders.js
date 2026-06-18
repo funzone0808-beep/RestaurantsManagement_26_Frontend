@@ -26,6 +26,11 @@ const STAFF_STATE = {
   staffUser: null,
   activeView: "dashboard",
   orders: [],
+  tableOrderMenu: [],
+  tableOrderCart: {},
+  tableOrderMenuLoaded: false,
+  tableOrderMenuQuery: "",
+  tableOrderMenuCategory: "all",
   dashboardReports: null,
   dashboardReportsFreshnessLabel: "",
   itemSalesReports: null,
@@ -47,6 +52,7 @@ const STAFF_CONTACT_STATUS_OPTIONS = ["new", "contacted", "resolved", "closed", 
 const STAFF_SUPPORT_STATUS_OPTIONS = ["new", "acknowledged", "resolved", "closed"];
 const STAFF_MANAGER_VIEWS = [
   "dashboard",
+  "table-order",
   "orders",
   "support",
   "reservations",
@@ -54,7 +60,7 @@ const STAFF_MANAGER_VIEWS = [
   "contacts",
   "testimonials"
 ];
-const STAFF_BASIC_VIEWS = ["orders", "support"];
+const STAFF_BASIC_VIEWS = ["table-order", "orders", "support"];
 const STAFF_ORDER_STATUS_LABELS = {
   new: "Received",
   confirmed: "Confirmed",
@@ -74,6 +80,12 @@ const STAFF_VIEW_META = {
     title: "Orders and billing workspace",
     description:
       "Review live QR and website orders, billing actions, payment state, and the current working queue for this hotel."
+  },
+  "table-order": {
+    badge: "Take Order",
+    title: "Take table order",
+    description:
+      "Create a staff-assisted dine-in order from this hotel's live menu."
   },
   support: {
     badge: "Support",
@@ -650,6 +662,11 @@ function resetStaffDashboardState() {
   STAFF_STATE.staffUser = null;
   STAFF_STATE.activeView = "dashboard";
   STAFF_STATE.orders = [];
+  STAFF_STATE.tableOrderMenu = [];
+  STAFF_STATE.tableOrderCart = {};
+  STAFF_STATE.tableOrderMenuLoaded = false;
+  STAFF_STATE.tableOrderMenuQuery = "";
+  STAFF_STATE.tableOrderMenuCategory = "all";
   STAFF_STATE.dashboardReports = null;
   STAFF_STATE.dashboardReportsFreshnessLabel = "";
   STAFF_STATE.itemSalesReports = null;
@@ -667,6 +684,8 @@ function resetStaffDashboardState() {
   showStaffView("dashboard");
   setStaffDashboardSummaryEmpty("Login to load the dashboard summary.");
   setStaffSectionLastUpdated("#staffDashboardLastUpdated", "Not refreshed yet");
+  renderStaffTableOrderMenu();
+  renderStaffTableOrderCart();
   updateStaffViewTabCounts();
 }
 
@@ -1063,6 +1082,7 @@ function getStaffOrderSourceMeta(order = {}) {
   const source = normalizeStatus(order.orderSource);
   const orderType = normalizeStatus(order.orderType);
   const tableNumber = String(order.tableNumber || "").trim();
+  const isStaffTableOrder = source === "staff";
   const isQrTableOrder =
     Boolean(tableNumber) ||
     orderType === "dine-in" ||
@@ -1070,8 +1090,18 @@ function getStaffOrderSourceMeta(order = {}) {
     source === "table" ||
     source === "dine-in";
 
+  if (isStaffTableOrder) {
+    return {
+      key: "staff-table",
+      label: "Staff Table",
+      detail: tableNumber ? `Table ${tableNumber}` : "Dine-in",
+      badgeClass: "is-important"
+    };
+  }
+
   if (isQrTableOrder) {
     return {
+      key: "qr-table",
       label: "QR Table",
       detail: tableNumber ? `Table ${tableNumber}` : "Dine-in",
       badgeClass: "is-important"
@@ -1079,6 +1109,7 @@ function getStaffOrderSourceMeta(order = {}) {
   }
 
   return {
+    key: "website",
     label: "Website",
     detail: "Online order",
     badgeClass: ""
@@ -1086,7 +1117,11 @@ function getStaffOrderSourceMeta(order = {}) {
 }
 
 function getStaffOrderSourceKey(order = {}) {
-  return getStaffOrderSourceMeta(order).label === "QR Table" ? "qr-table" : "website";
+  return getStaffOrderSourceMeta(order).key || "website";
+}
+
+function isStaffTableActivitySource(sourceKey = "") {
+  return sourceKey === "qr-table" || sourceKey === "staff-table";
 }
 
 function getStaffPaymentBadgeClass(paymentStatus = "") {
@@ -1224,7 +1259,7 @@ function getStaffOrdersSummary(orders = []) {
         summary.unbilledOrders += 1;
       }
 
-      if (sourceKey === "qr-table") {
+      if (isStaffTableActivitySource(sourceKey)) {
         summary.qrOrders += 1;
         summary.qrEarnings += total;
       } else {
@@ -1376,8 +1411,8 @@ function renderStaffOrdersSummary(orders = []) {
     ),
     buildStaffSummaryCard(
       "Order sources",
-      `${summary.qrOrders} QR / ${summary.websiteOrders} website`,
-      `${formatMoney(summary.qrEarnings)} QR - ${formatMoney(summary.websiteEarnings)} website`
+      `${summary.qrOrders} table / ${summary.websiteOrders} website`,
+      `${formatMoney(summary.qrEarnings)} table - ${formatMoney(summary.websiteEarnings)} website`
     )
   ].join("");
   renderStaffDashboardSupportSummary(STAFF_STATE.supportRequests);
@@ -1543,15 +1578,15 @@ function getStaffDashboardAiSourceBalanceInsight(reports = STAFF_STATE.dashboard
   if (totalOrders <= 0) {
     return {
       label: "Source balance",
-      copy: "This month is still too quiet to flag a QR versus website balance caution yet."
+      copy: "This month is still too quiet to flag a table versus website balance caution yet."
     };
   }
 
   const qrShare = monthQrOrders / totalOrders;
   const websiteShare = monthWebsiteOrders / totalOrders;
   const qrDominant = qrShare >= websiteShare;
-  const dominantLabel = qrDominant ? "QR and table" : "Website";
-  const supportingLabel = qrDominant ? "website" : "QR and table";
+  const dominantLabel = qrDominant ? "Table" : "Website";
+  const supportingLabel = qrDominant ? "website" : "table";
   const dominantOrders = qrDominant ? monthQrOrders : monthWebsiteOrders;
   const supportingOrders = qrDominant ? monthWebsiteOrders : monthQrOrders;
   const dominantRevenue = qrDominant ? monthQrEarnings : monthWebsiteEarnings;
@@ -1575,7 +1610,7 @@ function getStaffDashboardAiSourceBalanceInsight(reports = STAFF_STATE.dashboard
 
   return {
     label: "Source balance",
-    copy: `This month still looks reasonably balanced between QR/table and website ordering, with ${monthQrOrders} QR/table order${monthQrOrders === 1 ? "" : "s"} and ${monthWebsiteOrders} website order${monthWebsiteOrders === 1 ? "" : "s"}.`
+    copy: `This month still looks reasonably balanced between table and website ordering, with ${monthQrOrders} table order${monthQrOrders === 1 ? "" : "s"} and ${monthWebsiteOrders} website order${monthWebsiteOrders === 1 ? "" : "s"}.`
   };
 }
 
@@ -1818,22 +1853,22 @@ function getStaffDashboardAiInsightItems(
   if (monthQrOrders === 0 && monthWebsiteOrders === 0) {
     items.push({
       label: "Source mix",
-      copy: `${sourceMixLead} does not have enough order-source activity yet to explain a QR versus website trend.`
+      copy: `${sourceMixLead} does not have enough order-source activity yet to explain a table versus website trend.`
     });
   } else if (monthQrOrders > monthWebsiteOrders) {
     items.push({
       label: "Source mix",
-      copy: `${sourceMixLead} shows QR and table ordering leading at ${monthQrOrders} order${monthQrOrders === 1 ? "" : "s"} and ${formatMoney(monthQrEarnings)}, ahead of website ordering at ${monthWebsiteOrders} order${monthWebsiteOrders === 1 ? "" : "s"} and ${formatMoney(monthWebsiteEarnings)}.`
+      copy: `${sourceMixLead} shows table ordering leading at ${monthQrOrders} order${monthQrOrders === 1 ? "" : "s"} and ${formatMoney(monthQrEarnings)}, ahead of website ordering at ${monthWebsiteOrders} order${monthWebsiteOrders === 1 ? "" : "s"} and ${formatMoney(monthWebsiteEarnings)}.`
     });
   } else if (monthWebsiteOrders > monthQrOrders) {
     items.push({
       label: "Source mix",
-      copy: `${sourceMixLead} shows website ordering leading at ${monthWebsiteOrders} order${monthWebsiteOrders === 1 ? "" : "s"} and ${formatMoney(monthWebsiteEarnings)}, ahead of QR and table ordering at ${monthQrOrders} order${monthQrOrders === 1 ? "" : "s"} and ${formatMoney(monthQrEarnings)}.`
+      copy: `${sourceMixLead} shows website ordering leading at ${monthWebsiteOrders} order${monthWebsiteOrders === 1 ? "" : "s"} and ${formatMoney(monthWebsiteEarnings)}, ahead of table ordering at ${monthQrOrders} order${monthQrOrders === 1 ? "" : "s"} and ${formatMoney(monthQrEarnings)}.`
     });
   } else {
     items.push({
       label: "Source mix",
-      copy: `${sourceMixLead} is evenly split by order count, with ${monthQrOrders} QR/table order${monthQrOrders === 1 ? "" : "s"} and ${monthWebsiteOrders} website order${monthWebsiteOrders === 1 ? "" : "s"}, while revenue is ${formatMoney(monthQrEarnings)} versus ${formatMoney(monthWebsiteEarnings)}.`
+      copy: `${sourceMixLead} is evenly split by order count, with ${monthQrOrders} table order${monthQrOrders === 1 ? "" : "s"} and ${monthWebsiteOrders} website order${monthWebsiteOrders === 1 ? "" : "s"}, while revenue is ${formatMoney(monthQrEarnings)} versus ${formatMoney(monthWebsiteEarnings)}.`
     });
   }
 
@@ -2557,6 +2592,10 @@ function getStaffSelectedFilterLabels() {
 }
 
 function getStaffOrderSearchBlob(order = {}) {
+  const createdByStaff = order.createdByStaff && typeof order.createdByStaff === "object"
+    ? order.createdByStaff
+    : {};
+
   return [
     order.id,
     order.customerName,
@@ -2564,7 +2603,9 @@ function getStaffOrderSearchBlob(order = {}) {
     order.customerAddress,
     order.tableNumber,
     order.orderSequenceLabel,
-    order.billNumber
+    order.billNumber,
+    order.createdByStaffId,
+    createdByStaff.displayName
   ]
     .filter(Boolean)
     .join(" ")
@@ -3044,6 +3085,7 @@ function buildStaffBillPrintDocument(order = {}) {
   const addonSections = buildStaffBillAddonSections(childAddOns);
   const familyTotal = getStaffOrderFamilyTotal(order, childAddOns);
   const hasChildAddOns = childAddOns.length > 0;
+  const createdByLabel = getStaffOrderCreatedByLabel(order);
 
   const billTitle = getStaffBillTitle(order);
 
@@ -3113,6 +3155,7 @@ function buildStaffBillPrintDocument(order = {}) {
       <div class="row"><strong>Payment Status:</strong> ${escapeHTML(getStaffOrderPaymentStatus(order))}</div>
       <div class="row"><strong>Billing Status:</strong> ${escapeHTML(getStaffOrderBillingStatus(order))}</div>
       <div class="row"><strong>Source:</strong> ${escapeHTML(sourceMeta.label + sourceDetail)}</div>
+      ${createdByLabel ? `<div class="row"><strong>Taken By:</strong> ${escapeHTML(createdByLabel)}</div>` : ""}
       ${addonMeta.isAddon ? `<div class="row"><strong>Add-on:</strong> ${escapeHTML(addonMeta.label)}</div>` : ""}
     </section>
 
@@ -3157,6 +3200,20 @@ function openStaffOrderBill(order = {}) {
   printWindow.focus();
 }
 
+function getStaffOrderCreatedByLabel(order = {}) {
+  const createdByStaff = order.createdByStaff && typeof order.createdByStaff === "object"
+    ? order.createdByStaff
+    : {};
+  const displayName = String(createdByStaff.displayName || "").trim();
+  const createdByStaffId = String(order.createdByStaffId || createdByStaff.id || "").trim();
+
+  if (displayName) {
+    return `Staff - ${displayName}`;
+  }
+
+  return createdByStaffId ? `Staff #${createdByStaffId}` : "";
+}
+
 function buildStaffOrderCard(order = {}) {
   const orderId = order.id || "";
   const paymentStatus = getStaffOrderPaymentStatus(order);
@@ -3180,6 +3237,7 @@ function buildStaffOrderCard(order = {}) {
   const titlePrefix = addonMeta.isAddon ? `${addonMeta.label} - ` : "";
   const customerIdentity = order.customerName || order.customerPhone || sourceMeta.label;
   const familyActionHint = getStaffOrderFamilyActionHint(order, childAddOns);
+  const createdByLabel = getStaffOrderCreatedByLabel(order);
   const canManageBilling = isStaffManagerSession();
   const markBilledDisabled =
     !orderId || normalizeStatus(billingStatus) === "billed" ? "disabled" : "";
@@ -3256,6 +3314,7 @@ function buildStaffOrderCard(order = {}) {
         <span>Phone: ${escapeHTML(order.customerPhone || "Not provided")}</span>
         <span>Address: ${escapeHTML(order.customerAddress || "Not provided")}</span>
         <span>Method: ${escapeHTML(order.paymentMethod || "Not provided")}</span>
+        ${createdByLabel ? `<span>Taken By: ${escapeHTML(createdByLabel)}</span>` : ""}
         ${addonMeta.sequenceLabel ? `<span>Sequence: ${escapeHTML(addonMeta.sequenceLabel)}</span>` : ""}
         ${addonMeta.parentOrderId ? `<span>Parent order: #${escapeHTML(addonMeta.parentOrderId)}</span>` : ""}
         ${order.billNumber ? `<span>Bill: ${escapeHTML(order.billNumber)}</span>` : ""}
@@ -3286,21 +3345,33 @@ function buildStaffOrderSourceGroup(sourceKey, orders = []) {
     return "";
   }
 
-  const isQrTableGroup = sourceKey === "qr-table";
-  const title = isQrTableGroup ? "QR Table Orders" : "Website Orders";
-  const accentClass = isQrTableGroup ? "is-qr-table" : "is-website";
-  const note = isQrTableGroup
-    ? "Orders placed after scanning a table QR code, shown by latest table activity first."
-    : "Orders placed from the normal public website flow, shown by latest order activity first.";
+  const sourceGroupMeta = {
+    "qr-table": {
+      title: "QR Table Orders",
+      accentClass: "is-qr-table",
+      note: "Orders placed after scanning a table QR code, shown by latest table activity first."
+    },
+    "staff-table": {
+      title: "Staff Table Orders",
+      accentClass: "is-staff-table",
+      note: "Orders entered by staff from the table order pad, shown by latest table activity first."
+    },
+    website: {
+      title: "Website Orders",
+      accentClass: "is-website",
+      note: "Orders placed from the normal public website flow, shown by latest order activity first."
+    }
+  };
+  const meta = sourceGroupMeta[sourceKey] || sourceGroupMeta.website;
   const summary = getStaffOrderGroupSummary(orders);
   const countLabel = `${summary.totalOrders} order${summary.totalOrders === 1 ? "" : "s"}`;
 
   return `
-    <section class="staff-order-group ${escapeHTML(accentClass)}" aria-label="${escapeHTML(title)}">
+    <section class="staff-order-group ${escapeHTML(meta.accentClass)}" aria-label="${escapeHTML(meta.title)}">
       <div class="staff-order-group-header">
         <div>
-          <h3 class="staff-order-group-title">${escapeHTML(title)}</h3>
-          <p class="staff-order-group-note">${escapeHTML(note)}</p>
+          <h3 class="staff-order-group-title">${escapeHTML(meta.title)}</h3>
+          <p class="staff-order-group-note">${escapeHTML(meta.note)}</p>
         </div>
         <div class="staff-order-group-metrics">
           <span class="staff-order-group-count">${escapeHTML(countLabel)}</span>
@@ -3323,10 +3394,12 @@ function buildStaffOrdersListMarkup(orders = []) {
   }
 
   const qrOrders = orders.filter((order) => getStaffOrderSourceKey(order) === "qr-table");
+  const staffTableOrders = orders.filter((order) => getStaffOrderSourceKey(order) === "staff-table");
   const websiteOrders = orders.filter((order) => getStaffOrderSourceKey(order) === "website");
 
   return [
     buildStaffOrderSourceGroup("qr-table", qrOrders),
+    buildStaffOrderSourceGroup("staff-table", staffTableOrders),
     buildStaffOrderSourceGroup("website", websiteOrders)
   ].join("");
 }
@@ -3621,6 +3694,377 @@ function renderStaffOrders(orders = []) {
   content.innerHTML = buildStaffOrdersListMarkup(orders);
 }
 
+function normalizeStaffTableOrderMenuItem(item = {}) {
+  const id = String(item.id || item.itemId || item.item_id || "").trim();
+  const name = String(item.name || "").trim();
+
+  if (!id || !name) {
+    return null;
+  }
+
+  return {
+    id,
+    name,
+    desc: String(item.desc || item.description || "").trim(),
+    price: Number(item.price || 0) || 0,
+    category: String(item.category || "others").trim() || "others",
+    badge: String(item.badge || "").trim(),
+    tag: String(item.tag || "").trim()
+  };
+}
+
+function getStaffTableOrderCategoryLabel(category = "") {
+  const normalized = String(category || "")
+    .trim()
+    .replace(/[-_]+/g, " ");
+
+  if (!normalized) {
+    return "Others";
+  }
+
+  return normalized.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getStaffTableOrderAvailableCategories() {
+  return Array.from(
+    new Set(
+      STAFF_STATE.tableOrderMenu
+        .map((item) => String(item.category || "others").trim() || "others")
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+}
+
+function getFilteredStaffTableOrderMenuItems() {
+  const categoryFilter = String(STAFF_STATE.tableOrderMenuCategory || "all").trim() || "all";
+  const searchQuery = String(STAFF_STATE.tableOrderMenuQuery || "")
+    .trim()
+    .toLowerCase();
+
+  return STAFF_STATE.tableOrderMenu.filter((item) => {
+    const itemCategory = String(item.category || "others").trim() || "others";
+    const categoryMatches = categoryFilter === "all" || itemCategory === categoryFilter;
+    const searchBlob = [item.name, item.desc, item.category, item.badge, item.tag]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const searchMatches = !searchQuery || searchBlob.includes(searchQuery);
+
+    return categoryMatches && searchMatches;
+  });
+}
+
+function getStaffTableOrderMenuItem(itemId = "") {
+  const normalizedItemId = String(itemId || "").trim();
+  return STAFF_STATE.tableOrderMenu.find((item) => item.id === normalizedItemId) || null;
+}
+
+function getStaffTableOrderItemQty(itemId = "") {
+  return Number(STAFF_STATE.tableOrderCart[String(itemId || "").trim()] || 0) || 0;
+}
+
+function setStaffTableOrderItemQty(itemId = "", qty = 0) {
+  const normalizedItemId = String(itemId || "").trim();
+  const nextQty = Math.max(0, Math.min(100, Number(qty) || 0));
+
+  if (!normalizedItemId) return;
+
+  if (nextQty > 0) {
+    STAFF_STATE.tableOrderCart = {
+      ...STAFF_STATE.tableOrderCart,
+      [normalizedItemId]: nextQty
+    };
+  } else {
+    const nextCart = { ...STAFF_STATE.tableOrderCart };
+    delete nextCart[normalizedItemId];
+    STAFF_STATE.tableOrderCart = nextCart;
+  }
+
+  renderStaffTableOrderMenu();
+  renderStaffTableOrderCart();
+}
+
+function getStaffTableOrderCartEntries() {
+  return Object.entries(STAFF_STATE.tableOrderCart)
+    .map(([itemId, qty]) => {
+      const item = getStaffTableOrderMenuItem(itemId);
+      const quantity = Number(qty || 0) || 0;
+
+      if (!item || quantity <= 0) {
+        return null;
+      }
+
+      return {
+        ...item,
+        qty: quantity,
+        lineTotal: item.price * quantity
+      };
+    })
+    .filter(Boolean);
+}
+
+function getStaffTableOrderCartTotal(entries = getStaffTableOrderCartEntries()) {
+  return entries.reduce((sum, item) => sum + item.lineTotal, 0);
+}
+
+function setStaffTableOrderStatus(message = "", tone = "muted") {
+  const status = $("#staffTableOrderStatus");
+  if (!status) return;
+
+  status.hidden = !message;
+  status.textContent = message;
+  status.dataset.statusTone = tone;
+}
+
+function setStaffTableOrderMenuLoading(message = "Loading menu...") {
+  const content = $("#staffTableOrderMenuContent");
+  if (!content) return;
+
+  content.className = "staff-empty is-loading";
+  content.textContent = message;
+}
+
+function renderStaffTableOrderMenuFilters() {
+  const categoryFilter = $("#staffTableOrderCategoryFilter");
+  const searchInput = $("#staffTableOrderSearchInput");
+  const summary = $("#staffTableOrderFilterSummary");
+
+  if (searchInput && searchInput.value !== STAFF_STATE.tableOrderMenuQuery) {
+    searchInput.value = STAFF_STATE.tableOrderMenuQuery;
+  }
+
+  if (categoryFilter) {
+    const categories = getStaffTableOrderAvailableCategories();
+    categoryFilter.innerHTML = [
+      '<option value="all">All categories</option>',
+      ...categories.map(
+        (category) =>
+          `<option value="${escapeHTML(category)}">${escapeHTML(getStaffTableOrderCategoryLabel(category))}</option>`
+      )
+    ].join("");
+
+    if (
+      STAFF_STATE.tableOrderMenuCategory !== "all" &&
+      !categories.includes(STAFF_STATE.tableOrderMenuCategory)
+    ) {
+      STAFF_STATE.tableOrderMenuCategory = "all";
+    }
+
+    categoryFilter.value = STAFF_STATE.tableOrderMenuCategory;
+  }
+
+  if (summary) {
+    const filteredCount = getFilteredStaffTableOrderMenuItems().length;
+    const totalCount = STAFF_STATE.tableOrderMenu.length;
+    const activeCategory =
+      STAFF_STATE.tableOrderMenuCategory === "all"
+        ? "All categories"
+        : getStaffTableOrderCategoryLabel(STAFF_STATE.tableOrderMenuCategory);
+    const trimmedQuery = String(STAFF_STATE.tableOrderMenuQuery || "").trim();
+    const bits = [`${filteredCount} of ${totalCount} items`, activeCategory];
+
+    if (trimmedQuery) {
+      bits.push(`Search: "${trimmedQuery}"`);
+    }
+
+    summary.textContent = bits.join(" | ");
+  }
+}
+
+function buildStaffTableOrderMenuItemMarkup(item = {}) {
+  const qty = getStaffTableOrderItemQty(item.id);
+  const metaParts = [item.category, item.badge, item.tag].filter(Boolean);
+
+  return `
+    <article class="staff-table-order-item">
+      <div class="staff-table-order-item-head">
+        <div>
+          <h4 class="staff-table-order-item-title">${escapeHTML(item.name)}</h4>
+          ${metaParts.length ? `<p class="staff-table-order-item-meta">${escapeHTML(metaParts.join(" / "))}</p>` : ""}
+        </div>
+        <span class="staff-table-order-item-price">${escapeHTML(formatMoney(item.price))}</span>
+      </div>
+      ${item.desc ? `<p class="staff-table-order-item-meta">${escapeHTML(item.desc)}</p>` : ""}
+      <div class="staff-table-order-qty" aria-label="Quantity for ${escapeHTML(item.name)}">
+        <button class="staff-btn secondary" type="button" data-staff-table-order-minus="${escapeHTML(item.id)}" ${qty <= 0 ? "disabled" : ""}>-</button>
+        <span class="staff-table-order-qty-value">${escapeHTML(qty)}</span>
+        <button class="staff-btn secondary" type="button" data-staff-table-order-plus="${escapeHTML(item.id)}">+</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderStaffTableOrderMenu() {
+  const content = $("#staffTableOrderMenuContent");
+  if (!content) return;
+
+  if (!STAFF_STATE.tableOrderMenuLoaded) {
+    content.className = "staff-empty";
+    content.textContent = "Open this view to load the menu.";
+    return;
+  }
+
+  if (!STAFF_STATE.tableOrderMenu.length) {
+    content.className = "staff-empty";
+    content.textContent = "No available menu items found for this hotel.";
+    renderStaffTableOrderMenuFilters();
+    return;
+  }
+
+  const filteredItems = getFilteredStaffTableOrderMenuItems();
+  renderStaffTableOrderMenuFilters();
+
+  if (!filteredItems.length) {
+    const detailBits = [];
+
+    if (STAFF_STATE.tableOrderMenuCategory !== "all") {
+      detailBits.push(getStaffTableOrderCategoryLabel(STAFF_STATE.tableOrderMenuCategory));
+    }
+
+    if (String(STAFF_STATE.tableOrderMenuQuery || "").trim()) {
+      detailBits.push(`search "${String(STAFF_STATE.tableOrderMenuQuery || "").trim()}"`);
+    }
+
+    content.className = "staff-empty";
+    content.textContent = detailBits.length
+      ? `No menu items match ${detailBits.join(" and ")}.`
+      : "No menu items match the current filters.";
+    return;
+  }
+
+  content.className = "staff-table-order-menu-grid";
+  content.innerHTML = filteredItems
+    .map((item) => buildStaffTableOrderMenuItemMarkup(item))
+    .join("");
+}
+
+function renderStaffTableOrderCart() {
+  const summary = $("#staffTableOrderCartSummary");
+  const submitButton = $("#staffTableOrderSubmitBtn");
+  if (!summary) return;
+
+  const entries = getStaffTableOrderCartEntries();
+
+  if (!entries.length) {
+    summary.innerHTML = `<p class="staff-empty">No items selected.</p>`;
+    if (submitButton) submitButton.disabled = true;
+    return;
+  }
+
+  summary.innerHTML = `
+    <ul class="staff-table-order-cart-list">
+      ${entries.map((item) => `
+        <li class="staff-table-order-cart-row">
+          <span>${escapeHTML(item.name)} x${escapeHTML(item.qty)}</span>
+          <strong>${escapeHTML(formatMoney(item.lineTotal))}</strong>
+        </li>
+      `).join("")}
+    </ul>
+    <div class="staff-table-order-cart-total">
+      <span>Subtotal</span>
+      <strong>${escapeHTML(formatMoney(getStaffTableOrderCartTotal(entries)))}</strong>
+    </div>
+  `;
+
+  if (submitButton) submitButton.disabled = false;
+}
+
+async function loadStaffTableOrderMenu({ silent = false } = {}) {
+  try {
+    if (!silent) {
+      setStaffTableOrderMenuLoading();
+      setStaffSectionLastUpdated("#staffTableOrderLastUpdated", "Refreshing menu...");
+    }
+
+    const result = await staffFetchJson(`${STAFF_API_BASE}/menu`);
+    STAFF_STATE.tableOrderMenu = Array.isArray(result.items)
+      ? result.items.map(normalizeStaffTableOrderMenuItem).filter(Boolean)
+      : [];
+    STAFF_STATE.tableOrderMenuCategory = "all";
+    STAFF_STATE.tableOrderMenuLoaded = true;
+    renderStaffTableOrderMenu();
+    renderStaffTableOrderCart();
+    setStaffSectionLastUpdated("#staffTableOrderLastUpdated", getStaffLastUpdatedLabel());
+  } catch (error) {
+    console.error("Staff table order menu load failed:", error);
+    STAFF_STATE.tableOrderMenuLoaded = true;
+    const content = $("#staffTableOrderMenuContent");
+    if (content) {
+      content.className = "staff-empty";
+      content.textContent = error.message || "Failed to load menu.";
+    }
+    setStaffSectionLastUpdated("#staffTableOrderLastUpdated", "Menu load failed");
+  }
+}
+
+function clearStaffTableOrderForm({ keepStatus = false } = {}) {
+  $("#staffTableOrderForm")?.reset();
+  STAFF_STATE.tableOrderCart = {};
+  renderStaffTableOrderMenu();
+  renderStaffTableOrderCart();
+
+  if (!keepStatus) {
+    setStaffTableOrderStatus("");
+  }
+}
+
+async function handleStaffTableOrderSubmit(event) {
+  event.preventDefault();
+
+  const form = $("#staffTableOrderForm");
+  const submitButton = $("#staffTableOrderSubmitBtn");
+  const tableNumber = String($("#staffTableOrderTableInput")?.value || "").trim();
+  const customerName = String($("#staffTableOrderCustomerNameInput")?.value || "").trim();
+  const customerPhone = String($("#staffTableOrderCustomerPhoneInput")?.value || "").trim();
+  const note = String($("#staffTableOrderNoteInput")?.value || "").trim();
+  const entries = getStaffTableOrderCartEntries();
+
+  if (!form || !tableNumber) {
+    setStaffTableOrderStatus("Table number is required.", "warning");
+    return;
+  }
+
+  if (!entries.length) {
+    setStaffTableOrderStatus("Add at least one menu item.", "warning");
+    return;
+  }
+
+  setStaffActionBusyState(submitButton, true);
+  setStaffTableOrderStatus("Placing order...", "muted");
+
+  try {
+    await staffFetchJson(`${STAFF_API_BASE}/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        tableNumber,
+        customerName,
+        customerPhone,
+        note,
+        items: entries.map((item) => ({
+          id: item.id,
+          qty: item.qty
+        }))
+      })
+    });
+
+    clearStaffTableOrderForm({ keepStatus: true });
+    setStaffTableOrderStatus("Order saved.", "success");
+    await loadStaffOrders();
+    openStaffView("orders");
+  } catch (error) {
+    console.error("Staff table order submit failed:", error);
+    setStaffTableOrderStatus(error.message || "Failed to place order.", "warning");
+  } finally {
+    setStaffActionBusyState(submitButton, false);
+    if (submitButton) {
+      submitButton.disabled = !getStaffTableOrderCartEntries().length;
+    }
+  }
+}
+
 function setStaffOrdersLoading(message = "Loading staff orders...") {
   const content = $("#staffOrdersContent");
   setStaffDashboardSummaryEmpty("Loading dashboard summary...", true);
@@ -3716,6 +4160,10 @@ function openStaffView(view = "dashboard") {
 
   if (nextView === "support" && !STAFF_STATE.supportRequestsLoaded) {
     void loadStaffSupportRequests();
+  }
+
+  if (nextView === "table-order" && !STAFF_STATE.tableOrderMenuLoaded) {
+    void loadStaffTableOrderMenu();
   }
 
   if (nextView === "inquiries" && !STAFF_STATE.inquiriesLoaded) {
@@ -4435,7 +4883,10 @@ async function loginStaff(hotelSlug, pin) {
   });
 
   const data = await response.json().catch(() => ({}));
-
+console.log({
+  hotelSlug,
+  pin
+});
   if (!response.ok) {
     throw new Error(data.message || "Staff login failed");
   }
@@ -4626,6 +5077,11 @@ function bindStaffOrderActions() {
   const orderStatusInput = $("#staffOrdersStatusInput");
   const attentionToggle = $("#staffOrdersAttentionToggle");
   const clearFiltersButton = $("#staffClearFiltersBtn");
+  const tableOrderForm = $("#staffTableOrderForm");
+  const tableOrderClearButton = $("#staffTableOrderClearBtn");
+  const tableOrderRefreshMenuButton = $("#staffRefreshTableOrderMenuBtn");
+  const tableOrderSearchInput = $("#staffTableOrderSearchInput");
+  const tableOrderCategoryFilter = $("#staffTableOrderCategoryFilter");
   const reservationsRefreshButton = $("#staffRefreshReservationsBtn");
   const reservationsRangeInput = $("#staffReservationsRangeInput");
   const reservationsStatusInput = $("#staffReservationsStatusInput");
@@ -4708,6 +5164,39 @@ function bindStaffOrderActions() {
   if (clearFiltersButton) {
     clearFiltersButton.addEventListener("click", () => {
       resetStaffViewFilters();
+    });
+  }
+
+  if (tableOrderForm) {
+    tableOrderForm.addEventListener("submit", (event) => {
+      void handleStaffTableOrderSubmit(event);
+    });
+  }
+
+  if (tableOrderClearButton) {
+    tableOrderClearButton.addEventListener("click", () => {
+      clearStaffTableOrderForm();
+    });
+  }
+
+  if (tableOrderRefreshMenuButton) {
+    tableOrderRefreshMenuButton.addEventListener("click", () => {
+      void loadStaffTableOrderMenu();
+    });
+  }
+
+  if (tableOrderSearchInput) {
+    tableOrderSearchInput.addEventListener("input", () => {
+      STAFF_STATE.tableOrderMenuQuery = String(tableOrderSearchInput.value || "").trimStart();
+      renderStaffTableOrderMenu();
+    });
+  }
+
+  if (tableOrderCategoryFilter) {
+    tableOrderCategoryFilter.addEventListener("change", () => {
+      STAFF_STATE.tableOrderMenuCategory =
+        String(tableOrderCategoryFilter.value || "all").trim() || "all";
+      renderStaffTableOrderMenu();
     });
   }
 
@@ -4824,6 +5313,20 @@ function bindStaffOrderActions() {
     const target = event.target;
 
     if (!(target instanceof Element)) {
+      return;
+    }
+
+    const tableOrderPlusButton = target.closest("[data-staff-table-order-plus]");
+    if (tableOrderPlusButton) {
+      const itemId = tableOrderPlusButton.dataset.staffTableOrderPlus || "";
+      setStaffTableOrderItemQty(itemId, getStaffTableOrderItemQty(itemId) + 1);
+      return;
+    }
+
+    const tableOrderMinusButton = target.closest("[data-staff-table-order-minus]");
+    if (tableOrderMinusButton) {
+      const itemId = tableOrderMinusButton.dataset.staffTableOrderMinus || "";
+      setStaffTableOrderItemQty(itemId, getStaffTableOrderItemQty(itemId) - 1);
       return;
     }
 

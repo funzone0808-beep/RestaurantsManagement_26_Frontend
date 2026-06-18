@@ -1680,6 +1680,28 @@ function buildOrderContextRows(order = {}) {
   return rows.join("");
 }
 
+function getOrderCreatedByLabel(order = {}) {
+  const createdByStaff =
+    order.createdByStaff && typeof order.createdByStaff === "object" && !Array.isArray(order.createdByStaff)
+      ? order.createdByStaff
+      : {};
+  const displayName = String(createdByStaff.displayName || "").trim();
+  const createdByStaffId = String(order.createdByStaffId || createdByStaff.id || "").trim();
+
+  if (displayName) {
+    return `Staff - ${displayName}`;
+  }
+
+  return createdByStaffId ? `Staff #${createdByStaffId}` : "";
+}
+
+function buildOrderCreatedByRow(order = {}) {
+  const createdByLabel = getOrderCreatedByLabel(order);
+  return createdByLabel
+    ? `<div class="admin-row"><strong>Taken By:</strong> ${escapeHTML(createdByLabel)}</div>`
+    : "";
+}
+
 function buildOrderBillingRows(order = {}) {
   const rows = [];
   const showBillingDefaults = isDineInOrderCard(order);
@@ -2014,6 +2036,7 @@ function buildOrderBillTotalsRows(order = {}) {
 function buildOrderBillPrintDocument(order = {}) {
   const { orderType, tableNumber, orderSource } = getOrderContextValues(order);
   const billTitle = getOrderBillPrintTitle(order);
+  const createdByLabel = getOrderCreatedByLabel(order);
   const savedBillRefRow = order.bill_number
     ? `<p>${escapeHTML(getOrderBillNumberLabel(order))}: ${escapeHTML(order.bill_number)}</p>`
     : "";
@@ -2092,6 +2115,7 @@ function buildOrderBillPrintDocument(order = {}) {
       <div class="row"><strong>Order Type:</strong> ${escapeHTML(orderType || "dine-in")}</div>
       <div class="row"><strong>Table:</strong> ${escapeHTML(tableNumber || "Not provided")}</div>
       <div class="row"><strong>Source:</strong> ${escapeHTML(orderSource || "")}</div>
+      ${createdByLabel ? `<div class="row"><strong>Taken By:</strong> ${escapeHTML(createdByLabel)}</div>` : ""}
       <div class="row"><strong>Payment:</strong> ${escapeHTML(order.payment_method || "")}</div>
       <div class="row"><strong>Payment Status:</strong> ${escapeHTML(getPaymentStatusLabel(getOrderPaymentStatus(order, true)))}</div>
       <div class="row"><strong>Billing Status:</strong> ${escapeHTML(getOrderBillingStatus(order, true))}</div>
@@ -2265,6 +2289,7 @@ function renderOrders() {
               <div class="admin-row"><strong>Phone:</strong> ${escapeHTML(order.customer_phone || "")}</div>
               <div class="admin-row"><strong>Address:</strong> ${escapeHTML(order.customer_address || "")}</div>
               ${buildOrderContextRows(order)}
+              ${buildOrderCreatedByRow(order)}
               <div class="admin-row"><strong>Payment:</strong> ${escapeHTML(order.payment_method || "")}</div>
               ${buildOrderBillingRows(order)}
               ${buildOrderRouteTransferRows(order)}
